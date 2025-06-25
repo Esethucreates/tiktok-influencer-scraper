@@ -1,0 +1,57 @@
+# Web scraping & Browser automation
+zendriver
+asyncio-throttle
+
+
+# Database & ORM
+sqlalchemy
+alembic
+psycopg2-binary
+asyncpg
+
+
+# Configuration & Environment
+pydantic
+python-dotenv
+pydantic-settings
+
+# Data processing & analysis
+pandas
+numpy
+textblob
+langdetect
+
+# Async programming & concurrency
+tenacity
+
+# Logging & Monitoring
+loguru
+rich
+tqdm
+
+
+# Data validation & serialization
+marshmallow
+marshmallow-sqlalchemy
+
+# Utilities & Helpers
+click
+python-dateutil
+uuid
+validators
+
+# Json & data formats
+orjson
+jsonschema
+
+# Web utilities
+fake-useragent          # Random user agents for scraping
+
+
+# Development & Code quality
+black
+isort
+flake8
+humanize
+
+
