@@ -1,8 +1,6 @@
 import asyncio
 from typing import Any, Optional
-
 import zendriver as uc
-
 from src.services.AbstractAuthentication import BaseAuth
 
 
@@ -14,7 +12,7 @@ class TikTokAuth(BaseAuth):
         super().__init__("tiktok", accounts_file)
 
     def get_platform_url(self) -> str:
-        return "https://www.tiktok.com/"
+        return "https://www.tiktok.com/login"
 
     async def verify_login_status(self, page) -> bool:
         """Check if user is logged in by looking for login button"""
@@ -56,17 +54,7 @@ class TikTokAuth(BaseAuth):
             await page.get(self.get_platform_url())
             # TODO: Due to network constraints, logging in will require more time to load. Fix this!!
             print("Loading initial page for login")
-            await asyncio.sleep(90)  # Wait for page to load
-
-            # Find and click login button
-            login_button = await self._find_login_button(page)
-            if not login_button:
-                print("Login button not found")
-                return False
-
-            print("Clicking login button...")
-            await login_button.click()
-            await asyncio.sleep(5)
+            await asyncio.sleep(30)  # Wait for page to load
 
             # Select email login option
             if not await self._select_email_login(page):
@@ -98,35 +86,12 @@ class TikTokAuth(BaseAuth):
             print(f"Error during login process: {e}")
             return False
 
-    async def _find_login_button(self, page: uc.Tab) -> Optional[Any]:
-        """Find the login button on TikTok homepage"""
-        # selectors = [
-        #     "button#header-login-button",
-        #     "button#top-right-action-bar-login-button",
-        #     "[data-e2e='top-login-button']"
-        # ]
-        print("Looking for the login button")
-        btn = await page.find("Log in", best_match=True)
-
-        if btn is None:
-            raise Exception(f"Login button not found")
-        return btn
-
-        # for selector in selectors:
-        #     try:
-        #         button = await page.find(selector, "Log in", 15)
-        #         if button:
-        #             return button
-        #     except:
-        #         continue
-        #
-        # return None
-
-    async def _select_email_login(self, page) -> bool:
+    @staticmethod
+    async def _select_email_login(page) -> bool:
         """Select email login option"""
         try:
             # Wait for login modal to appear
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
 
             # Look for email login options
             # FIXME: Instead, look for text containing email
@@ -178,7 +143,8 @@ class TikTokAuth(BaseAuth):
             print(f"Error entering credentials: {e}")
             return False
 
-    async def _submit_login(self, page) -> bool:
+    @staticmethod
+    async def _submit_login(page) -> bool:
         """Submit the login form"""
         try:
             login_button = await page.select("[data-e2e='login-button']")
@@ -194,8 +160,9 @@ class TikTokAuth(BaseAuth):
             print(f"Error submitting login: {e}")
             return False
 
-    async def _type_text_slowly(self, element, text: str) -> None:
+    @staticmethod
+    async def _type_text_slowly(element, text: str) -> None:
         """Type text slowly to mimic human behavior"""
         for char in text:
             await element.send_keys(char)
-            await asyncio.sleep(0.1)  # Small delay between characters
+            await asyncio.sleep(0.14)  # Small delay between characters
