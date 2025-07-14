@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from base_scraper import CDPXHRMonitor
+from main_scaper import CDPXHRMonitor
 from browser_config import OptimizedNoDriver
 from profile_scraper import AuthorProfile, TikTokSearchScraper
 
