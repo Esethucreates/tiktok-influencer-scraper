@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
 from browser_config import OptimizedNoDriver
-from base_scraper import CDPXHRMonitor
+from main_scaper import CDPXHRMonitor
 
 
 @dataclass
@@ -247,7 +247,7 @@ class TikTokSearchScraper(CDPXHRMonitor):
 
                 # Add delay between hashtag searches
                 if hashtag != self.hashtags[-1]:  # Not the last hashtag
-                    await OptimizedNoDriver.human_like_page_load_wait(5.0, 8.0)
+                    await OptimizedNoDriver.human_like_page_load_wait(5.0, 25.0)
 
             except Exception as e:
                 print(f"❌ Error searching hashtag {hashtag}: {e}")
