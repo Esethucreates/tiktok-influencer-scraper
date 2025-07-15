@@ -2,3 +2,5 @@
 
 .env.prod
 .env.local
+
+.idea
