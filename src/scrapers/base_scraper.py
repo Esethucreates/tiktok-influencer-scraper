@@ -3,7 +3,7 @@ import base64
 import json
 import re
 from typing import Any
-from browser_config import OptimizedNoDriver
+from browserConfig import OptimizedNoDriver
 
 import zendriver as uc
 
