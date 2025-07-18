@@ -3,7 +3,7 @@ import json
 import re
 
 # Local Imports
-from browser_config import OptimizedNoDriver
+from browserConfig import OptimizedNoDriver
 from src.services.tiktokAuth import *
 from src.utils.exceptions import *
 
