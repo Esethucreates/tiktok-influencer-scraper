@@ -5,8 +5,8 @@ from typing import Dict, List, Optional, Any
 
 import zendriver as uc
 
-from browser_config import OptimizedNoDriver
-from src.scrapers.main_scaper import CDPXHRMonitor
+from browserConfig import OptimizedNoDriver
+from src.scrapers.requestMonitor import CDPXHRMonitor
 from src.utils.exceptions import AuthenticationError
 
 
@@ -411,13 +411,6 @@ async def main():
 
     # Method 1: Use the convenience method (recommended)
     results = await scraper.run_search_session()
-
-    # Method 2: Manual session management (for more control)
-    # await scraper.start_session()
-    # try:
-    #     results = await scraper.search_all_hashtags()
-    # finally:
-    #     await scraper.end_session()
 
     # Save results
     scraper.save_results("my_tiktok_results.json")
