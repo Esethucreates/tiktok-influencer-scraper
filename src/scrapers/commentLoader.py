@@ -488,7 +488,7 @@ class TikTokCommentsLoader(CDPXHRMonitor):
 
                 # Human-like scroll variation (similar to profile scrolling)
 
-                # FIXME: Add the function here or...
+
                 await self._simulate_scroll_variation()
 
                 # Scroll comment section
@@ -497,7 +497,7 @@ class TikTokCommentsLoader(CDPXHRMonitor):
                         random.randint(-self.config.comment_scroll_amount_variation,
                                        self.config.comment_scroll_amount_variation)
                 )
-                # TODO: Might need to fix this
+
                 print("Running the scroll function!!")
                 await self.page.evaluate(
                     f"if(document.querySelector('[data-e2e=\"search-comment-container\"]') && document.querySelector('[data-e2e=\"search-comment-container\"]').firstElementChild) {{ document.querySelector('[data-e2e=\"search-comment-container\"]').firstElementChild.scrollTo({{top: document.querySelector('[data-e2e=\"search-comment-container\"]').firstElementChild.scrollTop + {scroll_amount}, behavior: 'smooth'}}); }}"
