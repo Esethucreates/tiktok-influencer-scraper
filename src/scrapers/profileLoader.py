@@ -2,7 +2,7 @@ import asyncio
 import random
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 
 import zendriver as uc
 
@@ -108,6 +108,9 @@ class TikTokProfileLoader(CDPXHRMonitor):
         self.current_profile_index: int = 0
         self.total_profiles_to_load: int = 0
 
+    def set_config(self, config: ProfileLoadConfig):
+        self.config = config
+
     def load_profiles_from_search_results(self, search_scraper: TikTokSearchScraper) -> None:
         """
         Load profiles from TikTokSearchScraper results
@@ -137,7 +140,7 @@ class TikTokProfileLoader(CDPXHRMonitor):
         hashtag_counts = {ht: len(profiles) for ht, profiles in self.hashtag_to_profiles.items()}
         print(f"📊 Hashtag categorization: {hashtag_counts}")
 
-    def set_profiles_to_load(self, profiles: List[AuthorProfile], hashtag_mapping: Dict[str, List[str]] = None) -> None:
+    def set_profiles_to_load(self, profiles: List[AuthorProfile], hashtag_mapping: Dict[str, Set[str]] = None) -> None:
         """
         Directly set profiles to load (alternative to loading from search results)
 
@@ -208,7 +211,8 @@ class TikTokProfileLoader(CDPXHRMonitor):
         # Use parent's cleanup method
         await self.stop_browser()
 
-    def _build_profile_url(self, profile: AuthorProfile) -> str:
+    @staticmethod
+    def _build_profile_url(profile: AuthorProfile) -> str:
         """Build TikTok profile URL from AuthorProfile"""
         username = profile.username
         if not username.startswith('@'):
@@ -550,7 +554,7 @@ class TikTokProfileLoader(CDPXHRMonitor):
 
         return self.profile_posts
 
-    async def run_profile_loading_session(self) -> Dict[str, List[PostData]]:
+    async def run_profile_loading_session(self) -> Dict[str, List[PostData]] | None:
         """
         Convenience method that manages the entire profile loading session lifecycle.
         This is the main entry point for the profile loader.
