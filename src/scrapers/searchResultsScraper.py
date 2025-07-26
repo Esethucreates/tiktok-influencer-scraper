@@ -241,7 +241,7 @@ class TikTokSearchScraper(CDPXHRMonitor):
 
             # Wait for initial page load
             print("⏳ Waiting for initial page load...")
-            await asyncio.sleep(8)
+            await asyncio.sleep(15)
 
             print(f"📊 Responses after initial load: {len(self.matched_responses)}")
 
@@ -407,13 +407,13 @@ class TikTokSearchScraper(CDPXHRMonitor):
 
 async def main():
     hashtags = ["#technology", "#coding"]
-    scraper = TikTokSearchScraper(hashtags, max_profiles_per_hashtag=20)
+    scraper = TikTokSearchScraper(hashtags, max_profiles_per_hashtag=2, scroll_count=2, scroll_pause=4)
 
     # Method 1: Use the convenience method (recommended)
     results = await scraper.run_search_session()
 
     # Save results
-    scraper.save_results("my_tiktok_results.json")
+    scraper.save_results("../misc/my_tiktok_results.json")
 
     # Print summary
     stats = scraper.get_summary_stats()
