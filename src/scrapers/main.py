@@ -144,7 +144,7 @@ class ProgressTracker:
     def get_progress_string(self) -> str:
         """Get human-readable progress string"""
         if self.current_phase == "search":
-            return f"🔍 Search: {self.current_hashtag_index + 1}/{self.total_hashtags} hashtags (#{self.current_hashtag})"
+            return f"🔍 Search: {self.current_hashtag_index + 1}/{self.total_hashtags} hashtags ({self.current_hashtag})"
         elif self.current_phase == "profiles":
             return f"👤 Profiles: {self.current_profile_index + 1}/{self.total_profiles} (@{self.current_profile_username})"
         elif self.current_phase == "posts":
@@ -260,33 +260,84 @@ class UnifiedTikTokScraper:
             raise
 
     async def _share_session_with_search_scraper(self):
-        """Share session specifically with search scraper"""
+        """
+        Enhanced session sharing with proper CDPXHRMonitor initialization
+
+        This method ensures that when we share the browser session, we also
+        properly initialize all the network monitoring capabilities that
+        CDPXHRMonitor needs to function correctly.
+        """
         if self.search_scraper is None:
             return
 
         try:
-            # Share browser components
+            print("🔧 Setting up enhanced session sharing with search scraper...")
+
+            # Step 1: Share core browser components
             self.search_scraper.browser = self.profile_loader.browser
             self.search_scraper.page = self.profile_loader.page
             self.search_scraper.auth = self.profile_loader.auth
             self.search_scraper.is_authenticated = self.profile_loader.is_authenticated
             self.search_scraper.is_running = True
 
-            # Disable search scraper's own session management
+            # Step 2: Set session state flags to prevent duplicate initialization
             self.search_scraper.session_active = True
             self.search_scraper.session_initialized = True
 
-            # Set up response monitoring for search scraper
-            if hasattr(self.search_scraper, 'page') and self.search_scraper.page:
-                self.search_scraper.page.add_handler(
-                    uc.cdp.network.ResponseReceived,
-                    self.search_scraper.on_response_received
-                )
+            # Step 3: CRITICAL - Set up network event handlers that CDPXHRMonitor needs
+            # This is what was missing and causing the monitoring to fail
 
-            print("✅ Session shared with search scraper")
+            # Network monitoring should already be enabled by profile_loader.start_session()
+            # But we need to ensure the search scraper's event handlers are registered
+
+            if hasattr(self.search_scraper, 'page') and self.search_scraper.page:
+                # For CDPXHRMonitor (v2) - Enhanced version with multiple handlers
+                if hasattr(self.search_scraper, 'on_request_will_be_sent'):
+                    self.search_scraper.page.add_handler(
+                        uc.cdp.network.RequestWillBeSent,
+                        self.search_scraper.on_request_will_be_sent
+                    )
+                    print("✅ RequestWillBeSent handler registered")
+
+                if hasattr(self.search_scraper, 'on_response_received'):
+                    self.search_scraper.page.add_handler(
+                        uc.cdp.network.ResponseReceived,
+                        self.search_scraper.on_response_received
+                    )
+                    print("✅ ResponseReceived handler registered")
+
+                if hasattr(self.search_scraper, 'on_loading_finished'):
+                    self.search_scraper.page.add_handler(
+                        uc.cdp.network.LoadingFinished,
+                        self.search_scraper.on_loading_finished
+                    )
+                    print("✅ LoadingFinished handler registered")
+
+                if hasattr(self.search_scraper, 'on_loading_failed'):
+                    self.search_scraper.page.add_handler(
+                        uc.cdp.network.LoadingFailed,
+                        self.search_scraper.on_loading_failed
+                    )
+                    print("✅ LoadingFailed handler registered")
+
+                if hasattr(self.search_scraper, 'on_data_received'):
+                    self.search_scraper.page.add_handler(
+                        uc.cdp.network.DataReceived,
+                        self.search_scraper.on_data_received
+                    )
+                    print("✅ DataReceived handler registered")
+
+            # Step 4: Initialize tracking systems for CDPXHRMonitor v2
+            if hasattr(self.search_scraper, 'tracked_requests'):
+                # Reset tracking dictionaries to ensure clean state
+                self.search_scraper.tracked_requests = {}
+                self.search_scraper.matched_responses = []
+                print("✅ Tracking systems initialized")
+
+            print("✅ Enhanced session sharing completed successfully")
 
         except Exception as e:
-            print(f"❌ Error sharing session with search scraper: {e}")
+            print(f"❌ Error in enhanced session sharing: {e}")
             raise
 
     async def end_session(self):
@@ -531,12 +582,12 @@ class UnifiedTikTokScraper:
 
                 try:
                     # Get profiles for this hashtag from search results
-                    tag = f"#{hashtag}"
-                    print(f"This is the current hashtag {tag}")
-                    profiles_for_hashtag = search_results.get(tag, [])
+                    # tag = f"#{hashtag}"
+                    # print(f"This is the current hashtag {tag}")
+                    profiles_for_hashtag = search_results.get(hashtag, [])
 
                     # DEBUG: Print what we found
-                    print(f"🔍 Found {len(profiles_for_hashtag)} profiles for #{hashtag}")
+                    print(f"🔍 Found {len(profiles_for_hashtag)} profiles for {hashtag}")
 
                     # Store hashtag metadata
                     self.hashtags_data[hashtag] = {
@@ -558,13 +609,13 @@ class UnifiedTikTokScraper:
                             self._add_relationships(hashtag=hashtag, profile=profile)
                             total_profiles_found += 1
 
-                        print(f"✅ Stored {len(profiles_for_hashtag)} profiles for #{hashtag}")
+                        print(f"✅ Stored {len(profiles_for_hashtag)} profiles for {hashtag}")
                     else:
-                        print(f"❌ No profiles found for #{hashtag}")
+                        print(f"❌ No profiles found for {hashtag}")
                         self.failed_hashtags.append(hashtag)
 
                 except Exception as e:
-                    self._log_error("SEARCH", "HASHTAG_PROCESS_ERROR", f"Failed to process #{hashtag}", hashtag, e)
+                    self._log_error("SEARCH", "HASHTAG_PROCESS_ERROR", f"Failed to process {hashtag}", hashtag, e)
                     self.failed_hashtags.append(hashtag)
                     continue
 
@@ -655,6 +706,7 @@ class UnifiedTikTokScraper:
         print(f"\n🎯 Profiles phase completed: {total_posts} posts loaded")
 
     async def _run_comments_phase(self):
+        # TODO: This function doesn't get the comments properly. It previously worked. Must be the
         """Execute comments loading phase"""
         if not self.posts_data:
             print("❌ No posts to process for comments")
@@ -715,6 +767,23 @@ class UnifiedTikTokScraper:
 
         total_comments = len(self.comments_data)
         print(f"\n🎯 Comments phase completed: {total_comments} comments loaded")
+
+    async def run_complete_session(self, hashtags: List[str]) -> Dict[str, Any] | None:
+        """
+        Convenience method that manages complete session lifecycle
+
+        Args:
+            hashtags: List of hashtags to search
+
+        Returns:
+            Complete results dictionary
+        """
+        try:
+            await self.start_session()
+            results = await self.run_full_workflow(hashtags)
+            return results
+        finally:
+            await self.end_session()
 
     def get_relationship_summary(self) -> Dict[str, Any]:
         """Get summary of all relationships"""
@@ -965,23 +1034,6 @@ class UnifiedTikTokScraper:
         print(f"💾 Flattened results saved to {filename}")
         return results
 
-    async def run_complete_session(self, hashtags: List[str]) -> Dict[str, Any] | None:
-        """
-        Convenience method that manages complete session lifecycle
-
-        Args:
-            hashtags: List of hashtags to search
-
-        Returns:
-            Complete results dictionary
-        """
-        try:
-            await self.start_session()
-            results = await self.run_full_workflow(hashtags)
-            return results
-        finally:
-            await self.end_session()
-
 
 # Usage example:
 async def main():
@@ -990,11 +1042,11 @@ async def main():
 
         # Search results
         max_profiles_per_hashtag=2,
-        search_scroll_count=3,
+        search_scroll_count=5,
 
         # Profile scraping
-        max_posts_per_profile=2,
-        profile_scroll_count=2,
+        max_posts_per_profile=3,
+        profile_scroll_count=5,
         profile_load_delay_min=10.0,
         profile_load_delay_max=20.0,
         page_load_wait_min=15.0,
@@ -1014,7 +1066,7 @@ async def main():
     scraper = UnifiedTikTokScraper(config)
 
     # Option 1: Complete workflow
-    hashtags = ["travel"]
+    hashtags = ["#TravelDeals"]
     results = await scraper.run_complete_session(hashtags)
     scraper.save_results()
 
