@@ -7,7 +7,6 @@ from typing import Dict, List
 from browserConfig import OptimizedNoDriver
 from src.scrapers.profileLoader import PostData, ProfileLoadConfig, TikTokProfileLoader
 from src.scrapers.requestMonitor import CDPXHRMonitor
-from src.scrapers.searchResultsScraper import TikTokSearchScraper
 from src.services.tiktokAuth import *
 
 
@@ -130,10 +129,8 @@ class TikTokCommentsLoader(CDPXHRMonitor):
 
     def inherit_session_from_profile_loader(self, profile_loader: 'TikTokProfileLoader') -> None:
         """
-        Inherit the active browser session from a ProfileLoader instance
-
-        Args:
-            profile_loader: Active TikTokProfileLoader instance with established session
+        Enhanced session inheritance with proper network event handler setup
+        FIXED: Now properly sets up all CDPXHRMonitor v2 event handlers
         """
         if not profile_loader.session_active:
             raise RuntimeError("ProfileLoader session is not active")
@@ -145,13 +142,50 @@ class TikTokCommentsLoader(CDPXHRMonitor):
         self.is_authenticated = profile_loader.is_authenticated
         self.is_running = True
 
-        # Set up comment monitoring
-        self.page.add_handler(uc.cdp.network.ResponseReceived, self.on_response_received)
+        # CRITICAL FIX: Set up all network event handlers that CDPXHRMonitor v2 needs
+        try:
+            print("🔧 Setting up enhanced network monitoring for comments loader...")
+
+            # Ensure network monitoring is enabled (should already be enabled by ProfileLoader)
+            # But we'll verify it's still active
+            # await self.page.send(uc.cdp.network.enable())  # Commented out to avoid conflicts
+
+            # Register all CDPXHRMonitor v2 event handlers
+            if hasattr(self, 'on_request_will_be_sent'):
+                self.page.add_handler(uc.cdp.network.RequestWillBeSent, self.on_request_will_be_sent)
+                print("✅ RequestWillBeSent handler registered for comments")
+
+            if hasattr(self, 'on_response_received'):
+                self.page.add_handler(uc.cdp.network.ResponseReceived, self.on_response_received)
+                print("✅ ResponseReceived handler registered for comments")
+
+            if hasattr(self, 'on_loading_finished'):
+                self.page.add_handler(uc.cdp.network.LoadingFinished, self.on_loading_finished)
+                print("✅ LoadingFinished handler registered for comments")
+
+            if hasattr(self, 'on_loading_failed'):
+                self.page.add_handler(uc.cdp.network.LoadingFailed, self.on_loading_failed)
+                print("✅ LoadingFailed handler registered for comments")
+
+            if hasattr(self, 'on_data_received'):
+                self.page.add_handler(uc.cdp.network.DataReceived, self.on_data_received)
+                print("✅ DataReceived handler registered for comments")
+
+            # Initialize tracking systems for CDPXHRMonitor v2
+            if hasattr(self, 'tracked_requests'):
+                # Reset tracking dictionaries to ensure clean state
+                self.tracked_requests = {}
+                self.matched_responses = []
+                print("✅ Comments tracking systems initialized")
+
+        except Exception as e:
+            print(f"❌ Error setting up network handlers for comments loader: {e}")
+            raise
 
         self.profile_loader = profile_loader
         self.session_inherited = True
 
-        print("✅ Inherited browser session from ProfileLoader")
+        print("✅ Enhanced session inheritance completed for comments loader")
 
     def load_posts_from_profile_loader(self, profile_loader: 'TikTokProfileLoader', user_id: str = None) -> None:
         """
@@ -363,6 +397,7 @@ class TikTokCommentsLoader(CDPXHRMonitor):
     async def _navigate_to_post(self, post: PostData) -> bool:
         """
         Navigate to a specific post by finding and clicking its link
+        FIXED: Added better timing and debugging for network request capture
 
         Args:
             post: PostData object to navigate to
@@ -371,6 +406,11 @@ class TikTokCommentsLoader(CDPXHRMonitor):
             bool: Success status
         """
         try:
+            # Clear previous responses before navigation to avoid contamination
+            print(f"🧹 Clearing previous responses (had {len(self.matched_responses)} responses)")
+            self.matched_responses.clear()
+            self.tracked_requests.clear()
+
             # Find video link element
             video_element = await self._find_video_link_element(post)
 
@@ -381,13 +421,22 @@ class TikTokCommentsLoader(CDPXHRMonitor):
             print(f"🎬 Clicking on video post: {post.post_id}")
             await video_element.click()
 
-            # Wait for post page to load
-            load_wait = random.uniform(
+            # FIXED: Extended wait time for post to load and network requests to start
+            initial_wait = random.uniform(
                 self.config.post_load_wait_min,
                 self.config.post_load_wait_max
             )
-            print(f"⏳ Waiting for post to load: {load_wait:.1f}s")
-            await asyncio.sleep(load_wait)
+            print(f"⏳ Initial wait for post to load: {initial_wait:.1f}s")
+            await asyncio.sleep(initial_wait)
+
+            # Additional wait for network requests to be captured
+            print("⏳ Additional wait for network requests to initialize...")
+            await asyncio.sleep(3.0)  # Extra time for requests to start
+
+            # Debug: Check if we're capturing any requests at all
+            current_requests = len(self.tracked_requests)
+            current_responses = len(self.matched_responses)
+            print(f"🔍 Debug: {current_requests} tracked requests, {current_responses} responses after navigation")
 
             return True
 
@@ -473,6 +522,7 @@ class TikTokCommentsLoader(CDPXHRMonitor):
     async def _scroll_comment_section(self) -> int:
         """
         Scroll through comment section to load comments with human-like behavior
+        FIXED: Better debugging and timing for request capture
 
         Returns:
             int: Number of comments captured
@@ -480,15 +530,20 @@ class TikTokCommentsLoader(CDPXHRMonitor):
         comments_captured = 0
 
         try:
+            print(f"📜 Starting comment section scrolling (max {self.config.max_scroll_attempts} attempts)")
+
             for scroll_num in range(self.config.max_scroll_attempts):
                 if not self.is_running:
                     break
 
                 print(f"📜 Comment scroll {scroll_num + 1}/{self.config.max_scroll_attempts}")
 
-                # Human-like scroll variation (similar to profile scrolling)
+                # Debug: Check current state before scroll
+                requests_before = len(self.tracked_requests)
+                responses_before = len(self.matched_responses)
+                print(f"🔍 Before scroll: {requests_before} requests, {responses_before} responses")
 
-
+                # Human-like scroll variation
                 await self._simulate_scroll_variation()
 
                 # Scroll comment section
@@ -498,7 +553,7 @@ class TikTokCommentsLoader(CDPXHRMonitor):
                                        self.config.comment_scroll_amount_variation)
                 )
 
-                print("Running the scroll function!!")
+                print(f"📜 Scrolling comment section by {scroll_amount}px")
                 await self.page.evaluate(
                     f"if(document.querySelector('[data-e2e=\"search-comment-container\"]') && document.querySelector('[data-e2e=\"search-comment-container\"]').firstElementChild) {{ document.querySelector('[data-e2e=\"search-comment-container\"]').firstElementChild.scrollTo({{top: document.querySelector('[data-e2e=\"search-comment-container\"]').firstElementChild.scrollTop + {scroll_amount}, behavior: 'smooth'}}); }}"
                 )
@@ -508,21 +563,46 @@ class TikTokCommentsLoader(CDPXHRMonitor):
                     self.config.comment_scroll_pause_min,
                     self.config.comment_scroll_pause_max
                 )
+                print(f"⏳ Scroll pause: {pause_time:.1f}s")
                 await asyncio.sleep(pause_time)
+
+                # Additional wait for network requests to be triggered and captured
+                print("⏳ Waiting for network requests...")
+                await asyncio.sleep(2.0)
+
+                # Debug: Check what happened after scroll
+                requests_after = len(self.tracked_requests)
+                responses_after = len(self.matched_responses)
+                print(f"🔍 After scroll: {requests_after} requests, {responses_after} responses")
+                print(
+                    f"🔍 New requests: {requests_after - requests_before}, New responses: {responses_after - responses_before}")
 
                 # Simulate reading behavior
                 await self._simulate_reading_pause()
 
                 # Check how many comments we've captured so far
-                comments_captured = len([resp for resp in self.matched_responses
-                                         if self._extract_comments_from_response(resp)])
+                valid_responses = []
+                for resp in self.matched_responses:
+                    comments = self._extract_comments_from_response(resp)
+                    if comments:
+                        valid_responses.extend(comments)
 
-                print(f"💬 Comments captured so far: {comments_captured}")
+                comments_captured = len(valid_responses)
+                print(f"💬 Valid comments captured so far: {comments_captured}")
 
                 # Stop if we've reached our target
                 if comments_captured >= self.config.max_comments_per_post:
                     print(f"🎯 Reached target of {self.config.max_comments_per_post} comments")
                     break
+
+                # Stop if no new requests are being generated (page might be fully loaded)
+                if scroll_num > 2 and requests_after == requests_before:
+                    print("⚠️  No new requests generated, comments might be fully loaded")
+                    # Give it one more try
+                    await asyncio.sleep(3.0)
+                    if len(self.tracked_requests) == requests_after:
+                        print("ℹ️  Stopping scroll as no new requests are being generated")
+                        break
 
         except Exception as e:
             self._log_error("DOM_ERROR", "Error during comment section scrolling", exception=e)
@@ -532,13 +612,16 @@ class TikTokCommentsLoader(CDPXHRMonitor):
     async def _close_post(self) -> bool:
         """
         Close the current post and return to profile page
+        FIXED: Updated selector for new TikTok close button
 
         Returns:
             bool: Success status
         """
         try:
             print("🔄 Looking for close button...")
-            close_button = await self.page.query_selector("[data-e2e='browse-close']")
+
+            # FIXED: Use new close button selector
+            close_button = await self.page.query_selector('[aria-label="Close"]')
 
             if close_button:
                 print("✅ Found close button, closing post")
@@ -553,9 +636,23 @@ class TikTokCommentsLoader(CDPXHRMonitor):
 
                 return True
             else:
-                print("❌ Close button not found")
-                self._log_error("DOM_ERROR", "Close button not found")
-                return False
+                # Fallback to old selector in case they reverted
+                print("❌ New close button not found, trying fallback...")
+                fallback_button = await self.page.query_selector("[data-e2e='browse-close']")
+
+                if fallback_button:
+                    print("✅ Found fallback close button")
+                    await fallback_button.click()
+                    close_wait = random.uniform(
+                        self.config.post_close_wait_min,
+                        self.config.post_close_wait_max
+                    )
+                    await asyncio.sleep(close_wait)
+                    return True
+                else:
+                    print("❌ No close button found with either selector")
+                    self._log_error("DOM_ERROR", "Close button not found")
+                    return False
 
         except Exception as e:
             self._log_error("DOM_ERROR", "Error closing post", exception=e)
