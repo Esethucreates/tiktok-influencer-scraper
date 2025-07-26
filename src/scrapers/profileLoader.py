@@ -692,7 +692,7 @@ async def main():
 
     # Configure and run profile loading
     config = ProfileLoadConfig(
-        max_posts_per_profile=10,
+        max_posts_per_profile=3,
         scroll_count=5,
         profile_load_delay_min=10.0,
         profile_load_delay_max=20.0,
