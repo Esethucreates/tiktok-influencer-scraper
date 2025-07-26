@@ -706,7 +706,7 @@ class UnifiedTikTokScraper:
         print(f"\n🎯 Profiles phase completed: {total_posts} posts loaded")
 
     async def _run_comments_phase(self):
-        # TODO: This function doesn't get the comments properly. It previously worked. Must be the
+
         """Execute comments loading phase"""
         if not self.posts_data:
             print("❌ No posts to process for comments")
