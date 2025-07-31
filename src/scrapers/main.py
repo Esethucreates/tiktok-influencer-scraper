@@ -347,6 +347,8 @@ class UnifiedTikTokScraper:
             return
 
         try:
+            print("Waiting before page closes")
+            await asyncio.sleep(10)
             print("🔄 Ending unified scraping session...")
             await self.cleanup_session()
             print("✅ Unified scraping session ended successfully")
@@ -829,7 +831,6 @@ class UnifiedTikTokScraper:
                 'profile_url': profile_data.get('profile_url', f"https://www.tiktok.com/@{profile.username}"),
                 'found_under_hashtags': list(profile_data.get('found_under_hashtags', [])),
                 'raw_author_data': getattr(profile, 'raw_author_data', None),
-                'raw_author_stats': getattr(profile, 'raw_author_stats', None)
             }
             profiles_flat.append(flat_profile)
 
@@ -840,11 +841,6 @@ class UnifiedTikTokScraper:
             flat_post = {
                 'post_id': post.post_id,
                 'user_id': user_id,
-                'author_stats': getattr(post, 'author_stats', None),
-                'author_stats_v2': getattr(post, 'author_stats_v2', None),
-                'contents': getattr(post, 'contents', None),
-                'challenges': getattr(post, 'challenges', None),
-                'text_extra': getattr(post, 'text_extra', None),
                 'raw_post_data': getattr(post, 'raw_post_data', None)
             }
             posts_flat.append(flat_post)
@@ -870,18 +866,10 @@ class UnifiedTikTokScraper:
                 'comment_id': comment.cid,
                 'post_id': post_id,
                 'user_id': getattr(comment, 'user_id', None),
-                'comment_text': comment.text,
-                'create_time': comment.create_time,
-                'digg_count': comment.digg_count,
-                'is_author_digged': getattr(comment, 'is_author_digged', None),
-                'is_comment_translatable': getattr(comment, 'is_comment_translatable', None),
-                'comment_language': getattr(comment, 'comment_language', None),
-                'commenter_uid': getattr(comment.user, 'uid', None) if hasattr(comment, 'user') else None,
-                'commenter_nickname': getattr(comment.user, 'nickname', None) if hasattr(comment, 'user') else None,
-                'commenter_sec_uid': getattr(comment.user, 'sec_uid', None) if hasattr(comment, 'user') else None,
-                'commenter_unique_id': getattr(comment.user, 'unique_id', None) if hasattr(comment, 'user') else None,
                 'profile_username': profile.username if profile else '',
-                'profile_display_name': profile.display_name if profile else ''
+                'profile_display_name': profile.display_name if profile else '',
+                'raw_comment_data': comment.raw_comment_data,
+                'create_time': comment.create_time
             }
             comments_flat.append(flat_comment)
 
@@ -926,11 +914,10 @@ class UnifiedTikTokScraper:
         }
 
     @staticmethod
-    def save_as_csv_files(unified_scraper_results: Dict[str, Any], output_dir: str = "tiktok_csv_export") -> Dict[
-        str, str]:
+    def save_as_csv_files(unified_scraper_results: Dict[str, Any],
+                          output_dir: str = "../fileExports/tiktok_csv_export") -> Dict[str, str]:
         """
-        Convert unified scraper JSON results to multiple CSV files
-
+        Convert unified scraper JSON results to multiple CSV files with timestamp versioning
         Args:
             unified_scraper_results: Results from UnifiedTikTokScraper.get_flattened_data()
             output_dir: Directory to save CSV files
@@ -938,14 +925,17 @@ class UnifiedTikTokScraper:
         Returns:
             Dictionary mapping entity type to CSV file path
         """
-        # Create output directory
-        Path(output_dir).mkdir(exist_ok=True)
+        # Create timestamp for file versioning
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Create output directory (keeping it simple)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
         csv_files = {}
 
         try:
             # 1. Profiles CSV
             if 'profiles' in unified_scraper_results and unified_scraper_results['profiles']:
-                profiles_file = os.path.join(output_dir, "profiles.csv")
+                profiles_file = os.path.join(output_dir, f"profiles_{timestamp}.csv")
                 with open(profiles_file, 'w', newline='', encoding='utf-8') as f:
                     if unified_scraper_results['profiles']:
                         writer = csv.DictWriter(f, fieldnames=unified_scraper_results['profiles'][0].keys())
@@ -956,7 +946,7 @@ class UnifiedTikTokScraper:
 
             # 2. Posts CSV
             if 'posts' in unified_scraper_results and unified_scraper_results['posts']:
-                posts_file = os.path.join(output_dir, "posts.csv")
+                posts_file = os.path.join(output_dir, f"posts_{timestamp}.csv")
                 with open(posts_file, 'w', newline='', encoding='utf-8') as f:
                     if unified_scraper_results['posts']:
                         writer = csv.DictWriter(f, fieldnames=unified_scraper_results['posts'][0].keys())
@@ -967,7 +957,7 @@ class UnifiedTikTokScraper:
 
             # 3. Comments CSV
             if 'comments' in unified_scraper_results and unified_scraper_results['comments']:
-                comments_file = os.path.join(output_dir, "comments.csv")
+                comments_file = os.path.join(output_dir, f"comments_{timestamp}.csv")
                 with open(comments_file, 'w', newline='', encoding='utf-8') as f:
                     if unified_scraper_results['comments']:
                         writer = csv.DictWriter(f, fieldnames=unified_scraper_results['comments'][0].keys())
@@ -979,7 +969,7 @@ class UnifiedTikTokScraper:
             # 4. Profile-Hashtag Relations CSV
             if 'profile_hashtag_relations' in unified_scraper_results and unified_scraper_results[
                 'profile_hashtag_relations']:
-                relations_file = os.path.join(output_dir, "profile_hashtag_relations.csv")
+                relations_file = os.path.join(output_dir, f"profile_hashtag_relations_{timestamp}.csv")
                 with open(relations_file, 'w', newline='', encoding='utf-8') as f:
                     if unified_scraper_results['profile_hashtag_relations']:
                         writer = csv.DictWriter(f, fieldnames=unified_scraper_results['profile_hashtag_relations'][
@@ -992,7 +982,7 @@ class UnifiedTikTokScraper:
 
             # 5. Summary CSV
             if 'load_summary' in unified_scraper_results:
-                summary_file = os.path.join(output_dir, "scrape_summary.csv")
+                summary_file = os.path.join(output_dir, f"scrape_summary_{timestamp}.csv")
                 summary_data = unified_scraper_results['load_summary']
 
                 # Flatten summary for CSV
@@ -1019,19 +1009,61 @@ class UnifiedTikTokScraper:
                 csv_files['summary'] = summary_file
                 print(f"✅ Saved scrape summary to {summary_file}")
 
+            # 6. Create a metadata file with export information
+            metadata_file = os.path.join(output_dir, f"export_metadata_{timestamp}.csv")
+            export_time = datetime.now()
+            metadata = [{
+                'export_timestamp': export_time.strftime("%Y-%m-%d %H:%M:%S"),
+                'export_date': export_time.strftime("%Y-%m-%d"),
+                'export_time': export_time.strftime("%H:%M:%S"),
+                'file_version': timestamp,
+                'total_files_created': len(csv_files),
+                'profiles_count': len(unified_scraper_results.get('profiles', [])),
+                'posts_count': len(unified_scraper_results.get('posts', [])),
+                'comments_count': len(unified_scraper_results.get('comments', [])),
+                'relations_count': len(unified_scraper_results.get('profile_hashtag_relations', []))
+            }]
+
+            with open(metadata_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=metadata[0].keys())
+                writer.writeheader()
+                writer.writerows(metadata)
+            csv_files['metadata'] = metadata_file
+
             print(f"\n🎉 All CSV files saved to directory: {output_dir}")
+            print(f"📅 File version: {timestamp}")
             return csv_files
 
         except Exception as e:
             print(f"❌ Error saving CSV files: {e}")
             raise
 
-    def save_results(self, filename: str = "unified_tiktok_scrape_results.json"):
-        """Save complete flattened results to JSON file"""
+    def save_results(self, filename: str = "../fileExports/jsonFiles/unified_tiktok_scrape_results.json"):
+        """Save complete flattened results to JSON file with timestamp versioning"""
+
+        # Create timestamp for file versioning
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Parse the original filename to add versioning
+        file_path = Path(filename)
+        directory = file_path.parent
+        file_stem = file_path.stem  # filename without extension
+        file_extension = file_path.suffix  # .json
+
+        # Create versioned filename
+        versioned_filename = directory / f"{file_stem}_{timestamp}{file_extension}"
+
+        # Ensure directory exists
+        directory.mkdir(parents=True, exist_ok=True)
+
+        # Get results and save
         results = self.get_flattened_data()
-        OptimizedNoDriver.save_json_to_file(results, filename)
+        OptimizedNoDriver.save_json_to_file(results, str(versioned_filename))
         self.save_as_csv_files(results)
-        print(f"💾 Flattened results saved to {filename}")
+
+        print(f"💾 Flattened results saved to {versioned_filename}")
+        print(f"📅 File version: {timestamp}")
+
         return results
 
 
@@ -1042,19 +1074,19 @@ async def main():
 
         # Search results
         max_profiles_per_hashtag=2,
-        search_scroll_count=5,
+        search_scroll_count=2,
 
         # Profile scraping
-        max_posts_per_profile=3,
-        profile_scroll_count=5,
+        max_posts_per_profile=2,
+        profile_scroll_count=3,
         profile_load_delay_min=10.0,
         profile_load_delay_max=20.0,
-        page_load_wait_min=15.0,
-        page_load_wait_max=20.0,
+        page_load_wait_min=10.0,
+        page_load_wait_max=15.0,
         reading_pause_probability=0.8,
 
         max_comments_per_post=10,
-        max_scroll_attempts_comments=3,
+        max_scroll_attempts_comments=2,
 
         # Comment section scrolling behavior
         comment_scroll_pause_min=2.0,
@@ -1073,3 +1105,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+# TODO: Fix the Readme, has a lot of crap in it. Also TikAuth not working ( It doesn't break out of the loop)
