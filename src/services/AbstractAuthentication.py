@@ -12,10 +12,10 @@ class BaseAuth(ABC):
     Provides common functionality for session management and account rotation.
     """
 
-    def __init__(self, platform: str, accounts_file: str = "../misc/scraping_accounts.json"):
+    def __init__(self, platform: str, accounts_file: str = "../fileExports/scraping_accounts.json"):
         self.platform = platform
         self.accounts_file = accounts_file
-        self.session_file = f"{platform}.session.dat"
+        self.session_file = f"../fileExports/sessionFiles/{platform}.session.dat"
         self.cooldown_period = timedelta(minutes=10)
 
     @abstractmethod
@@ -133,7 +133,7 @@ class BaseAuth(ABC):
         try:
             # Navigate to platform homepage
             await page.get(self.get_platform_url())
-            await asyncio.sleep(5)  # Wait for page to load
+            await asyncio.sleep(10)  # Wait for page to load
 
             # Check if logged in
             is_logged_in = await self.verify_login_status(page)
