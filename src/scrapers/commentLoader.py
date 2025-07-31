@@ -11,39 +11,12 @@ from src.services.tiktokAuth import *
 
 
 @dataclass
-class User:
-    uid: str  # Unique user ID (for tracking behavior)
-    nickname: str  # Username (for display / label purposes)
-    sec_uid: str  # Secure UID (if needed for user-level analysis)
-    unique_id: str  # Public identifier
-
-
-@dataclass
-class ReplyComment:
-    cid: str  # Comment ID
-    text: str  # Comment text (main for sentiment analysis)
-    create_time: int  # Timestamp (for recency analysis)
-    digg_count: int  # Likes (indicator of engagement)
-    is_author_digged: bool  # Did the creator like it?
-    is_comment_translatable: bool
-    comment_language: str
-    user: User  # Commenter identity
-    reply_id: str  # Thread ID (helps cluster conversations)
-
-
-@dataclass
 class Comment:
     cid: str  # Comment ID
-    text: str  # Text content (core for NLP/sentiment)
     create_time: int  # Timestamp (for freshness/recency)
-    digg_count: int  # Engagement score
-    is_author_digged: bool  # Did author like it?
-    is_comment_translatable: bool
-    comment_language: str  # Language of the comment
-    user: User  # Identity of the commenter
-    reply_comment: List[ReplyComment]  # Threaded replies (sentiment in context)
     post_id: str  # Link to parent post
     user_id: str  # Link to profile owner
+    raw_comment_data: Dict[str, Any]
 
 
 @dataclass
@@ -658,15 +631,15 @@ class TikTokCommentsLoader(CDPXHRMonitor):
             self._log_error("DOM_ERROR", "Error closing post", exception=e)
             return False
 
-    @staticmethod
-    def _extract_user_from_data(user_data: Dict[str, Any]) -> User:
-        """Extract User object from API data"""
-        return User(
-            uid=user_data.get('uid', ''),
-            nickname=user_data.get('nickname', ''),
-            sec_uid=user_data.get('sec_uid', ''),
-            unique_id=user_data.get('unique_id', '')
-        )
+    # @staticmethod
+    # def _extract_user_from_data(user_data: Dict[str, Any]) -> User:
+    #     """Extract User object from API data"""
+    #     return User(
+    #         uid=user_data.get('uid', ''),
+    #         nickname=user_data.get('nickname', ''),
+    #         sec_uid=user_data.get('sec_uid', ''),
+    #         unique_id=user_data.get('unique_id', '')
+    #     )
 
     def _extract_comments_from_response(self, response_data: Dict[str, Any]) -> List[Comment]:
         """
@@ -694,22 +667,23 @@ class TikTokCommentsLoader(CDPXHRMonitor):
 
             for comment_data in comments_data:
                 try:
-                    user_data = comment_data.get('user', {})
-                    user = self._extract_user_from_data(user_data)
+                    # user_data = comment_data.get('user', {})
+                    # user = self._extract_user_from_data(user_data)
 
                     comment = Comment(
                         cid=comment_data.get('cid', ''),
-                        text=comment_data.get('text', ''),
-                        create_time=comment_data.get('create_time', 0),
-                        digg_count=comment_data.get('digg_count', 0),
-                        is_author_digged=comment_data.get('is_author_digged', False),
-                        is_comment_translatable=comment_data.get('is_comment_translatable', False),
-                        comment_language=comment_data.get('comment_language', ''),
-                        user=user,
-                        reply_comment=[],  # Only top-level comments for now
                         post_id=self.posts_to_process[self.current_post_index].post_id if self.current_post_index < len(
                             self.posts_to_process) else '',
-                        user_id=self.current_profile.user_id if self.current_profile else ''
+                        user_id=self.current_profile.user_id if self.current_profile else '',
+                        # text=comment_data.get('text', ''),
+                        create_time=comment_data.get('create_time', 0),
+                        # digg_count=comment_data.get('digg_count', 0),
+                        # is_author_digged=comment_data.get('is_author_digged', False),
+                        # is_comment_translatable=comment_data.get('is_comment_translatable', False),
+                        # comment_language=comment_data.get('comment_language', ''),
+                        # user=user,
+                        # reply_comment=[],  # Only top-level comments for now
+                        raw_comment_data=comment_data
                     )
 
                     comments.append(comment)
@@ -870,18 +844,20 @@ class TikTokCommentsLoader(CDPXHRMonitor):
                     'comment_id': comment.cid,
                     'post_id': comment.post_id,
                     'user_id': comment.user_id,
-                    'comment_text': comment.text,
-                    'create_time': comment.create_time,
-                    'digg_count': comment.digg_count,
-                    'is_author_digged': comment.is_author_digged,
-                    'is_comment_translatable': comment.is_comment_translatable,
-                    'comment_language': comment.comment_language,
-                    'commenter_uid': comment.user.uid,
-                    'commenter_nickname': comment.user.nickname,
-                    'commenter_sec_uid': comment.user.sec_uid,
-                    'commenter_unique_id': comment.user.unique_id,
                     'profile_username': self.current_profile.username if self.current_profile else '',
-                    'profile_display_name': self.current_profile.display_name if self.current_profile else ''
+                    'profile_display_name': self.current_profile.display_name if self.current_profile else '',
+                    'raw_comment_data': comment.raw_comment_data,
+                    # 'comment_text': comment.text,
+                    # 'create_time': comment.create_time,
+                    # 'digg_count': comment.digg_count,
+                    # 'is_author_digged': comment.is_author_digged,
+                    # 'is_comment_translatable': comment.is_comment_translatable,
+                    # 'comment_language': comment.comment_language,
+                    # 'commenter_uid': comment.user.uid,
+                    # 'commenter_nickname': comment.user.nickname,
+                    # 'commenter_sec_uid': comment.user.sec_uid,
+                    # 'commenter_unique_id': comment.user.unique_id,
+
                 }
                 csv_data.append(csv_row)
 

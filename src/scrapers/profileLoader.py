@@ -16,11 +16,6 @@ from src.utils.exceptions import AuthenticationError
 class PostData:
     """Data structure for individual TikTok post information"""
     post_id: str
-    author_stats: Dict[str, Any]
-    author_stats_v2: Dict[str, Any]
-    contents: Dict[str, Any]
-    challenges: List[Dict[str, Any]]  # hashtag info
-    text_extra: List[Dict[str, Any]]  # hashtags used
     raw_post_data: Dict[str, Any]
 
 
@@ -373,19 +368,8 @@ class TikTokProfileLoader(CDPXHRMonitor):
         try:
             # Extract only the required fields
             post_id = item_data.get('id', '')
-            author_stats = item_data.get('authorStats', {})
-            author_stats_v2 = item_data.get('authorStatsV2', {})
-            contents = item_data.get('contents', {})
-            challenges = item_data.get('challenges', [])
-            text_extra = item_data.get('textExtra', [])
-
             post_data = PostData(
                 post_id=post_id,
-                author_stats=author_stats,
-                author_stats_v2=author_stats_v2,
-                contents=contents,
-                challenges=challenges,
-                text_extra=text_extra,
                 raw_post_data=item_data
             )
 
@@ -641,11 +625,6 @@ class TikTokProfileLoader(CDPXHRMonitor):
                 posts_flat.append({
                     'post_id': post.post_id,
                     'user_id': user_id,
-                    'author_stats': post.author_stats,
-                    'author_stats_v2': post.author_stats_v2,
-                    'contents': post.contents,
-                    'challenges': post.challenges,
-                    'text_extra': post.text_extra,
                     'raw_post_data': post.raw_post_data
                 })
 

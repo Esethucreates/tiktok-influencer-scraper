@@ -22,8 +22,6 @@ class AuthorProfile:
     heart_count: int
     video_count: int
     raw_author_data: Dict[str, Any]
-    raw_author_stats: Dict[str, Any]
-
 
 class TikTokSearchScraper(CDPXHRMonitor):
     """
@@ -110,7 +108,7 @@ class TikTokSearchScraper(CDPXHRMonitor):
                 heart_count=int(author_stats.get('heartCount', 0)),
                 video_count=int(author_stats.get('videoCount', 0)),
                 raw_author_data=author,
-                raw_author_stats=author_stats
+                # raw_author_stats=author_stats
             )
 
             return profile
@@ -392,7 +390,6 @@ class TikTokSearchScraper(CDPXHRMonitor):
                     'heart_count': profile.heart_count,
                     'video_count': profile.video_count,
                     'raw_author_data': profile.raw_author_data,
-                    'raw_author_stats': profile.raw_author_stats
                 }
                 for user_id, profile in self.author_profiles.items()
             },
@@ -407,13 +404,13 @@ class TikTokSearchScraper(CDPXHRMonitor):
 
 async def main():
     hashtags = ["#technology", "#coding"]
-    scraper = TikTokSearchScraper(hashtags, max_profiles_per_hashtag=2, scroll_count=2, scroll_pause=4)
+    scraper = TikTokSearchScraper(hashtags, max_profiles_per_hashtag=2, scroll_count=2, scroll_pause=3)
 
     # Method 1: Use the convenience method (recommended)
     results = await scraper.run_search_session()
 
     # Save results
-    scraper.save_results("../misc/my_tiktok_results.json")
+    scraper.save_results("../fileExports/jsonFiles/my_tiktok_results.json")
 
     # Print summary
     stats = scraper.get_summary_stats()
