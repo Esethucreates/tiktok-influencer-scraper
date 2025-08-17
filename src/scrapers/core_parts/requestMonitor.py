@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List
 
+from src.scrapers.core_parts.browserConfig import OptimizedNoDriver
 # Local Imports
-from browserConfig import OptimizedNoDriver
+
 from src.services.tiktokAuth import *
 from src.utils.exceptions import *
 
@@ -41,7 +42,8 @@ class CDPXHRMonitor:
     """
 
     def __init__(self, target_url: str, regex_pattern: str, scroll_count: int = 5,
-                 scroll_pause: int = 2, timeout: int = 10, accounts_file: str = "../misc/scraping_accounts.json"):
+                 scroll_pause: int = 2, timeout: int = 10,
+                 accounts_file: str = "../fileExports/scraping_accounts.json"):
         """
         Initialize the monitor with enhanced authentication and response handling capabilities.
         """
@@ -143,6 +145,7 @@ class CDPXHRMonitor:
                 print(f"Invalid account configuration: {account}")
                 continue
 
+            # TODO: Break at the first sight of a working account
             print(f"Attempting login with account: {username}")
 
             # Create a new tab for login
@@ -159,6 +162,8 @@ class CDPXHRMonitor:
                     await self.auth.save_cookies(self.browser)
 
                     # Mark account as working
+                    # TODO: The error is occurring here. It mistakenly throws an error even if account is working
+                    # It cannot find the file containing accounts or checked for exception before task was complete
                     self.auth.mark_account_working(username)
 
                     # Close login tab
@@ -171,7 +176,8 @@ class CDPXHRMonitor:
                     await self.auth.load_cookies(self.browser)
 
                     self.is_authenticated = True
-                    return
+                    break
+                # Supposed to break here
                 else:
                     print(f"Login failed for {username}")
                     # Mark account as failed
@@ -519,49 +525,3 @@ class CDPXHRMonitor:
         finally:
             print("Cleaning up...")
             await self.stop_browser()
-
-
-# Usage remains the same
-async def main():
-    TARGET_PAGE = "https://www.tiktok.com/@kabelo_manyiki"
-    REGEX_PATTERN = r"https:\/\/www\.tiktok\.com\/api\/post\/item_list\/\?[^ ]+"
-
-    monitor = CDPXHRMonitor(
-        target_url=TARGET_PAGE,
-        regex_pattern=REGEX_PATTERN,
-        scroll_count=3,
-        scroll_pause=3
-    )
-
-    try:
-        results = await monitor.run()
-
-        print(f"\n=== RESULTS ===")
-        if not results:
-            print("No matching responses found!")
-        else:
-            for i, item in enumerate(results, 1):
-                print(f"\nResponse {i}:")
-                print(f"URL: {item['url']}")
-                print(f"Status: {item['status']}")
-                print(f"Body available: {item['body'] is not None}")
-                print(f"Is large response: {item.get('is_large_response', False)}")
-                print(f"Attempts needed: {item.get('attempts_needed', 'N/A')}")
-
-                if item['body'] is not None:
-                    OptimizedNoDriver.save_json_to_file(item['body'])
-                    if isinstance(item['body'], dict):
-                        print(f"Body keys: {list(item['body'].keys())}")
-                    elif isinstance(item['body'], str):
-                        print(f"Body length: {len(item['body'])} characters")
-                else:
-                    print(f"Error: {item.get('error', 'Unknown error')}")
-
-    except Exception as e:
-        print(f"Error in main: {e}")
-        import traceback
-        traceback.print_exc()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
