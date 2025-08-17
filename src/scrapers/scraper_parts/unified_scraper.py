@@ -1,158 +1,20 @@
 import csv
+import glob
+import json
 import os
-from dataclasses import dataclass
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Set
 
 # Assuming imports from your existing modules
-from browserConfig import OptimizedNoDriver
-from src.scrapers.commentLoader import Comment, CommentsLoadConfig, TikTokCommentsLoader
-from src.scrapers.profileLoader import PostData, ProfileLoadConfig, TikTokProfileLoader
-from src.scrapers.searchResultsScraper import TikTokSearchScraper, AuthorProfile
+
+from src.scrapers.DTOs.unified_schemas import UnifiedScraperConfig, ProgressTracker, SessionState
+from src.scrapers.core_parts.browserConfig import OptimizedNoDriver
+from src.scrapers.scraper_parts.commentLoader import Comment, TikTokCommentsLoader
+from src.scrapers.scraper_parts.profileLoader import PostData, TikTokProfileLoader
+from src.scrapers.scraper_parts.searchResultsScraper import TikTokSearchScraper, AuthorProfile
 from src.services.tiktokAuth import *
-
-
-@dataclass
-class UnifiedScraperConfig:
-    """Master configuration combining all scraper configs"""
-
-    # Search Configuration
-    max_profiles_per_hashtag: int = 50
-    search_scroll_count: int = 10
-    search_scroll_pause: int = 3
-
-    # Profile Loading Configuration
-    max_posts_per_profile: int = 50
-    profile_scroll_count: int = 25
-    profile_scroll_pause_min: float = 2.0
-    profile_scroll_pause_max: float = 4.0
-    profile_scroll_amount_base: int = 800
-    profile_scroll_amount_variation: int = 200
-
-    # Page loading and navigation
-    page_load_wait_min: float = 10.0
-    page_load_wait_max: float = 15.0
-    profile_navigation_delay_min: float = 3.0
-    profile_navigation_delay_max: float = 6.0
-
-    # Inter-operation delays
-    profile_load_delay_min: float = 10.0
-    profile_load_delay_max: float = 15.0
-
-    # Comments Loading Configuration
-    max_comments_per_post: int = 100
-    max_scroll_attempts_comments: int = 20
-    comment_scroll_pause_min: float = 2.0
-    comment_scroll_pause_max: float = 5.0
-    comment_scroll_amount_base: int = 500
-    comment_scroll_amount_variation: int = 100
-
-    # Post navigation and loading
-    post_load_wait_min: float = 10.0
-    post_load_wait_max: float = 15.0
-    post_close_wait_min: float = 2.0
-    post_close_wait_max: float = 5.0
-
-    # Human-like interaction settings (shared)
-    reading_pause_probability: float = 0.3
-    reading_pause_min: float = 1.0
-    reading_pause_max: float = 3.0
-    scroll_direction_change_probability: float = 0.4
-    scroll_up_amount: int = 200
-
-    # Video link detection
-    video_link_search_timeout: int = 10
-    video_link_scroll_attempts: int = 5
-    video_link_scroll_pause: float = 2.0
-
-    # Comment section detection
-    comment_section_wait_timeout: int = 15
-
-    def to_profile_config(self) -> ProfileLoadConfig:
-        """Convert to ProfileLoadConfig"""
-        return ProfileLoadConfig(
-            max_posts_per_profile=self.max_posts_per_profile,
-            scroll_count=self.profile_scroll_count,
-            scroll_pause_min=self.profile_scroll_pause_min,
-            scroll_pause_max=self.profile_scroll_pause_max,
-            scroll_amount_base=self.profile_scroll_amount_base,
-            scroll_amount_variation=self.profile_scroll_amount_variation,
-            page_load_wait_min=self.page_load_wait_min,
-            page_load_wait_max=self.page_load_wait_max,
-            profile_navigation_delay_min=self.profile_navigation_delay_min,
-            profile_navigation_delay_max=self.profile_navigation_delay_max,
-            profile_load_delay_min=self.profile_load_delay_min,
-            profile_load_delay_max=self.profile_load_delay_max,
-            reading_pause_probability=self.reading_pause_probability,
-            reading_pause_min=self.reading_pause_min,
-            reading_pause_max=self.reading_pause_max,
-            scroll_direction_change_probability=self.scroll_direction_change_probability,
-            scroll_up_amount=self.scroll_up_amount
-        )
-
-    def to_comments_config(self) -> CommentsLoadConfig:
-        """Convert to CommentsLoadConfig"""
-        return CommentsLoadConfig(
-            max_comments_per_post=self.max_comments_per_post,
-            max_scroll_attempts=self.max_scroll_attempts_comments,
-            max_posts_per_profile=self.max_posts_per_profile,
-            comment_scroll_pause_min=self.comment_scroll_pause_min,
-            comment_scroll_pause_max=self.comment_scroll_pause_max,
-            comment_scroll_amount_base=self.comment_scroll_amount_base,
-            comment_scroll_amount_variation=self.comment_scroll_amount_variation,
-            post_load_wait_min=self.post_load_wait_min,
-            post_load_wait_max=self.post_load_wait_max,
-            post_close_wait_min=self.post_close_wait_min,
-            post_close_wait_max=self.post_close_wait_max,
-            video_link_search_timeout=self.video_link_search_timeout,
-            video_link_scroll_attempts=self.video_link_scroll_attempts,
-            video_link_scroll_pause=self.video_link_scroll_pause,
-            comment_section_wait_timeout=self.comment_section_wait_timeout,
-            reading_pause_probability=self.reading_pause_probability,
-            reading_pause_min=self.reading_pause_min,
-            reading_pause_max=self.reading_pause_max,
-            scroll_direction_change_probability=self.scroll_direction_change_probability,
-            scroll_up_amount=self.scroll_up_amount
-        )
-
-
-@dataclass
-class ProgressTracker:
-    """Track progress across all phases"""
-    # Current phase
-    current_phase: str = "idle"  # idle, search, profiles, posts, comments
-
-    # Search phase
-    total_hashtags: int = 0
-    current_hashtag_index: int = 0
-    current_hashtag: str = ""
-
-    # Profile phase
-    total_profiles: int = 0
-    current_profile_index: int = 0
-    current_profile_username: str = ""
-
-    # Posts phase
-    total_posts: int = 0
-    current_post_index: int = 0
-    current_post_id: str = ""
-
-    # Comments phase
-    total_comments_collected: int = 0
-
-    def get_progress_string(self) -> str:
-        """Get human-readable progress string"""
-        if self.current_phase == "search":
-            return f"🔍 Search: {self.current_hashtag_index + 1}/{self.total_hashtags} hashtags ({self.current_hashtag})"
-        elif self.current_phase == "profiles":
-            return f"👤 Profiles: {self.current_profile_index + 1}/{self.total_profiles} (@{self.current_profile_username})"
-        elif self.current_phase == "posts":
-            return f"🎬 Posts: {self.current_post_index + 1}/{self.total_posts} (Post: {self.current_post_id})"
-        elif self.current_phase == "comments":
-            return f"💬 Comments: {self.total_comments_collected} collected"
-        else:
-            return f"⏸️ {self.current_phase.title()}"
 
 
 class UnifiedTikTokScraper:
@@ -201,6 +63,10 @@ class UnifiedTikTokScraper:
         self.failed_posts: List[str] = []
         self.error_log: List[Dict[str, Any]] = []
 
+        # NEW: Add session state tracking
+        self.session_state: Optional[SessionState] = None
+        self.saved_data_file: Optional[str] = None
+
     def _initialize_search_scraper(self, hashtags: List[str]):
         """Initialize search scraper with hashtags and matching config"""
         if self.search_scraper is None:
@@ -218,8 +84,254 @@ class UnifiedTikTokScraper:
             )
             print("✅ Search scraper initialized")
 
+    def _initialize_session_state(self, hashtags: List[str]):
+        """Initialize session state for timing and progress tracking"""
+        duration_seconds = self.config.session_duration_minutes * 60
+
+        self.session_state = SessionState(
+            session_start_time=time.time(),
+            session_duration_limit=duration_seconds,
+            hashtags_to_process=hashtags.copy(),
+            original_hashtags=hashtags.copy()
+        )
+
+        print(f"⏰ Session initialized with {self.config.session_duration_minutes} minute limit")
+
+    def _check_time_and_save_if_needed(self) -> bool:
+        """Check if we should continue or save and stop. Returns False if should stop."""
+        if not self.session_state or self.session_state.should_continue():
+            return True
+
+        print(f"💾 Time limit reached. Saving current progress...")
+        self._save_current_state()
+        return False
+
+    def _get_saved_data_files(self) -> List[str]:
+        """Get list of saved data files sorted by timestamp (newest first)"""
+        import os
+
+        saved_dir = self.config.saved_data_directory
+        if not os.path.exists(saved_dir):
+            return []
+
+        pattern = os.path.join(saved_dir, "tiktok_scraper_state_*.json")
+        files = glob.glob(pattern)
+
+        # Sort by modification time (newest first)
+        files.sort(key=os.path.getmtime, reverse=True)
+        return files
+
+    def _load_saved_state(self) -> bool:
+        """Load the most recent saved state. Returns True if data was loaded."""
+        if not self.config.check_for_saved_data:
+            print("🔄 Skipping saved data check (disabled in config)")
+            return False
+
+        saved_files = self._get_saved_data_files()
+        if not saved_files:
+            print("🔄 No saved data found. Starting fresh scrape.")
+            return False
+
+        try:
+            latest_file = saved_files[0]
+            print(f"📂 Found saved data: {os.path.basename(latest_file)}")
+
+            with open(latest_file, 'r', encoding='utf-8') as f:
+                saved_data = json.load(f)
+
+            # Restore data collections
+            self._restore_from_saved_data(saved_data)
+
+            # Set the file reference for cleanup later
+            self.saved_data_file = latest_file
+
+            print(f"✅ Successfully loaded saved state from {os.path.basename(latest_file)}")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error loading saved data: {e}")
+            print("🔄 Starting fresh scrape instead.")
+            return False
+
+    def _restore_from_saved_data(self, saved_data: dict):
+        """Restore scraper state from saved data"""
+
+        # Restore data collections
+        metadata = saved_data.get('metadata', {})
+        data = saved_data.get('data', {})
+        relationships = saved_data.get('relationships', {})
+
+        # Restore hashtags data
+        self.hashtags_data = data.get('hashtags', {})
+
+        # Restore profiles data (need to reconstruct AuthorProfile objects)
+        profiles_data = data.get('profiles', {})
+        for user_id, profile_dict in profiles_data.items():
+            # Create AuthorProfile from saved dict
+            profile = AuthorProfile(
+                user_id=profile_dict['user_id'],
+                username=profile_dict['username'],
+                display_name=profile_dict['display_name'],
+                avatar_url=profile_dict.get('avatar_url'),
+                verified=profile_dict.get('verified', False),
+                follower_count=profile_dict.get('follower_count', 0),
+                following_count=profile_dict.get('following_count', 0),
+                heart_count=profile_dict.get('heart_count', 0),
+                video_count=profile_dict.get('video_count', 0),
+                raw_author_data=None
+            )
+
+            self.profiles_data[user_id] = {
+                'profile': profile,
+                'search_timestamp': metadata.get('scrape_timestamp'),
+                'profile_url': f"https://www.tiktok.com/@{profile.username}",
+                'found_under_hashtags': set()
+            }
+
+        # Restore posts data (need to reconstruct PostData objects)
+        posts_data = data.get('posts', {})
+        for post_id, post_dict in posts_data.items():
+            post = PostData(
+                post_id=post_dict['post_id'],
+                raw_post_data=post_dict.get('raw_post_data')
+            )
+            self.posts_data[post_id] = post
+
+        # Restore comments data (need to reconstruct Comment objects)
+        comments_data = data.get('comments', {})
+        for comment_id, comment_dict in comments_data.items():
+            post_id = self.comment_to_post.get(comment_id)
+            comment = Comment(
+                post_id=post_id,
+                user_id=getattr(comment_dict, 'user_id', None),
+                cid=comment_dict['cid'],
+                raw_comment_data=comment_dict.get('raw_comment_data'),
+                create_time=comment_dict.get('create_time')
+            )
+            self.comments_data[comment_id] = comment
+
+        # Restore relationships
+        for attr_name, relationship_dict in relationships.items():
+            if hasattr(self, attr_name):
+                if attr_name in ['hashtag_to_profiles', 'profile_to_posts', 'post_to_comments']:
+                    # Convert lists back to sets
+                    setattr(self, attr_name, {k: set(v) for k, v in relationship_dict.items()})
+                elif attr_name in ['profile_to_hashtags']:
+                    # Convert lists back to sets
+                    setattr(self, attr_name, {k: set(v) for k, v in relationship_dict.items()})
+                else:
+                    # Direct assignment for simple dict mappings
+                    setattr(self, attr_name, relationship_dict)
+
+        # Update found_under_hashtags for profiles
+        for user_id in self.profiles_data:
+            hashtags_for_profile = self.profile_to_hashtags.get(user_id, set())
+            self.profiles_data[user_id]['found_under_hashtags'] = hashtags_for_profile
+
+        print(
+            f"📊 Restored: {len(self.profiles_data)} profiles, {len(self.posts_data)} posts, {len(self.comments_data)} comments")
+
+    def _save_current_state(self):
+        """Save current scraper state to JSON file"""
+        try:
+            # Create saved data directory
+            Path(self.config.saved_data_directory).mkdir(parents=True, exist_ok=True)
+
+            # Generate timestamp filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"tiktok_scraper_state_{timestamp}.json"
+            filepath = os.path.join(self.config.saved_data_directory, filename)
+
+            # Get current complete results
+            state_data = self.get_complete_results()
+
+            # Add session state information
+            if self.session_state:
+                state_data['session_metadata'] = {
+                    'session_start_time': self.session_state.session_start_time,
+                    'time_elapsed_minutes': (time.time() - self.session_state.session_start_time) / 60,
+                    'current_phase': self.session_state.current_phase,
+                    'current_hashtag_index': self.session_state.current_hashtag_index,
+                    'current_profile_index': self.session_state.current_profile_index,
+                    'current_post_index': self.session_state.current_post_index,
+                    'hashtags_to_process': self.session_state.hashtags_to_process,
+                    'original_hashtags': self.session_state.original_hashtags,
+                    'resumed_from_saved_data': self.session_state.resumed_from_saved_data
+                }
+
+            # Save to file
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(state_data, f, indent=2, ensure_ascii=False, default=str)
+
+            print(f"💾 State saved to: {filename}")
+
+            # Clean up old saved files (keep only the 3 most recent)
+            self._cleanup_old_saved_files()
+
+        except Exception as e:
+            print(f"❌ Error saving state: {e}")
+
+    def _cleanup_old_saved_files(self, keep_count: int = 3):
+        """Clean up old saved state files, keeping only the most recent ones"""
+        try:
+            saved_files = self._get_saved_data_files()
+
+            # Remove files beyond keep_count
+            for old_file in saved_files[keep_count:]:
+                os.remove(old_file)
+                print(f"🗑️  Cleaned up old save file: {os.path.basename(old_file)}")
+
+        except Exception as e:
+            print(f"⚠️  Warning: Could not clean up old files: {e}")
+
+    def _cleanup_current_saved_file(self):
+        """Remove the saved file that was used for resuming (successful completion)"""
+        if self.saved_data_file and os.path.exists(self.saved_data_file):
+            try:
+                os.remove(self.saved_data_file)
+                print(f"🗑️  Removed completed save file: {os.path.basename(self.saved_data_file)}")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not remove save file: {e}")
+
+    def _determine_resume_point(self, original_hashtags: List[str]) -> tuple:
+        """Determine where to resume scraping based on current data state"""
+
+        # Determine what hashtags still need processing
+        hashtags_to_process = []
+        for hashtag in original_hashtags:
+            if hashtag not in self.hashtags_data:
+                hashtags_to_process.append(hashtag)
+
+        if hashtags_to_process:
+            print(f"🔄 Resuming search phase: {len(hashtags_to_process)} hashtags remaining")
+            return "search", hashtags_to_process, 0
+
+        # Check for profiles that need post loading
+        profiles_needing_posts = []
+        for user_id, profile_data in self.profiles_data.items():
+            if 'posts_count' not in profile_data or profile_data.get('posts_count', 0) == 0:
+                # Profile exists but posts weren't loaded
+                profiles_needing_posts.append(user_id)
+
+        if profiles_needing_posts:
+            print(f"🔄 Resuming profiles phase: {len(profiles_needing_posts)} profiles need post loading")
+            return "profiles", profiles_needing_posts, 0
+
+        # Check for posts that need comment loading
+        posts_needing_comments = []
+        for post_id in self.posts_data.keys():
+            if post_id not in self.post_to_comments or len(self.post_to_comments[post_id]) == 0:
+                posts_needing_comments.append(post_id)
+
+        if posts_needing_comments:
+            print(f"🔄 Resuming comments phase: {len(posts_needing_comments)} posts need comment loading")
+            return "comments", posts_needing_comments, 0
+
+        print("✅ All data appears complete. Starting fresh scrape.")
+        return "complete", [], 0
+
     async def start_session(self):
-        """Start unified browser session"""
+        """Start unified browser session with saved data check"""
         if self.session_active:
             print("🔄 Unified scraper session already active")
             return
@@ -436,45 +548,95 @@ class UnifiedTikTokScraper:
                 profile_user_id = self.post_to_profile[post_id]
                 self.comment_to_profile[comment_id] = profile_user_id
 
+    # MODIFY: run_full_workflow method
     async def run_full_workflow(self, hashtags: List[str]) -> Dict[str, Any]:
         """
-        Complete end-to-end workflow: Search → Profiles → Posts → Comments
-
-        Args:
-            hashtags: List of hashtags to search
-
-        Returns:
-            Complete results dictionary
+        Complete end-to-end workflow with pause/resume capability
         """
         if not self.session_active:
             raise RuntimeError("Session not active. Call start_session() first.")
 
-        print(f"\n🚀 Starting full TikTok scraping workflow for {len(hashtags)} hashtags")
-        print(f"🏷️  Hashtags: {', '.join(hashtags)}")
+        # Check for saved data and load if available
+        resumed = self._load_saved_state()
+
+        if resumed:
+            # Determine resume point
+            session_meta = getattr(self, '_last_session_metadata', {})
+            original_hashtags = session_meta.get('original_hashtags', hashtags)
+            resume_phase, items_to_process, start_index = self._determine_resume_point(original_hashtags)
+
+            # Initialize session state for resumed session
+            self._initialize_session_state(original_hashtags)
+            self.session_state.resumed_from_saved_data = True
+
+            if resume_phase == "complete":
+                print("🎉 Previous scrape was complete!")
+                self._cleanup_current_saved_file()
+                return self.get_complete_results()
+
+        else:
+            # Fresh scrape
+            self._initialize_session_state(hashtags)
+            resume_phase = "search"
+            items_to_process = hashtags
+            start_index = 0
+
+        print(f"\n🚀 Starting{'(resumed)' if resumed else ''} TikTok scraping workflow")
+        print(f"⏰ Session time limit: {self.config.session_duration_minutes} minutes")
 
         try:
-            # Initialize search scraper with hashtags
-            self._initialize_search_scraper(hashtags)
+            # Initialize search scraper if needed
+            if resume_phase == "search":
+                self._initialize_search_scraper(items_to_process)
+                await self._share_session_with_search_scraper()
 
-            # Share session with newly initialized search scraper
-            await self._share_session_with_search_scraper()
+            # Execute phases based on resume point
+            if resume_phase == "search":
+                if not self._check_time_and_save_if_needed():
+                    return self.get_complete_results()
+                await self._run_search_phase_with_timing(items_to_process)
 
-            # Phase 1: Search
-            self._update_progress("search", total_hashtags=len(hashtags))
-            await self._run_search_phase(hashtags)
+            if resume_phase in ["search", "profiles"]:
+                if not self._check_time_and_save_if_needed():
+                    return self.get_complete_results()
+                await self._run_profiles_phase_with_timing()
 
-            # Phase 2: Load Profiles & Posts
-            await self._run_profiles_phase()
+            if resume_phase in ["search", "profiles", "comments"]:
+                if not self._check_time_and_save_if_needed():
+                    return self.get_complete_results()
+                await self._run_comments_phase_with_timing()
 
-            # Phase 3: Load Comments
-            await self._run_comments_phase()
+            # If we completed successfully, clean up save file
+            if resumed:
+                self._cleanup_current_saved_file()
 
             print(f"\n🎉 Full workflow completed successfully!")
             return self.get_complete_results()
 
         except Exception as e:
-            self._log_error("WORKFLOW", "CRITICAL_ERROR", f"Full workflow failed: {e}", exception=e)
+            # Save state on any error
+            self._save_current_state()
+            self._log_error("WORKFLOW", "CRITICAL_ERROR", f"Workflow failed: {e}", exception=e)
             raise
+
+    async def run_complete_session_with_resume(self, hashtags: List[str]) -> Dict[str, Any]:
+        """
+        Convenience method with automatic error handling and state saving
+        """
+        try:
+            await self.start_session()
+            results = await self.run_full_workflow(hashtags)
+            return results
+        except KeyboardInterrupt:
+            print("\n⏹️  Manual interruption detected. Saving current state...")
+            self._save_current_state()
+            raise
+        except Exception as e:
+            print(f"\n❌ Unexpected error: {e}")
+            self._save_current_state()
+            raise
+        finally:
+            await self.end_session()
 
     async def run_from_profiles(self, profiles: List[AuthorProfile],
                                 hashtag_mapping: Dict[str, List[str]] = None) -> Dict[str, Any]:
@@ -505,10 +667,10 @@ class UnifiedTikTokScraper:
                         self._add_relationships(hashtag=hashtag, profile=profile)
 
             # Phase 2: Load Posts
-            await self._run_profiles_phase()
+            await self._run_profiles_phase_with_timing()
 
             # Phase 3: Load Comments
-            await self._run_comments_phase()
+            await self._run_comments_phase_with_timing()
 
             print(f"\n🎉 Profile-based workflow completed successfully!")
             return self.get_complete_results()
@@ -547,7 +709,7 @@ class UnifiedTikTokScraper:
                         self._add_relationships(profile=profile, post=post)
 
             # Phase 3: Load Comments
-            await self._run_comments_phase()
+            await self._run_comments_phase_with_timing()
 
             print(f"\n🎉 Comments-only workflow completed successfully!")
             return self.get_complete_results()
@@ -556,39 +718,29 @@ class UnifiedTikTokScraper:
             self._log_error("WORKFLOW", "CRITICAL_ERROR", f"Comments workflow failed: {e}", exception=e)
             raise
 
-    async def _run_search_phase(self, hashtags: List[str]):
-        """Execute search phase using TikTokSearchScraper"""
+    # MODIFY: _run_search_phase method (add timing checks)
+    async def _run_search_phase_with_timing(self, hashtags: List[str]):
+        """Execute search phase with timing checks"""
         print(f"\n{'=' * 60}")
         print(f"🔍 PHASE 1: SEARCHING HASHTAGS")
         print(f"{'=' * 60}")
 
-        if self.search_scraper is None:
-            raise RuntimeError("Search scraper not initialized. This should not happen.")
+        self.session_state.current_phase = "search"
 
         try:
-            # Use the search scraper's search_all_hashtags method
-            print(f"🏷️  Searching all {len(hashtags)} hashtags...")
             search_results = await self.search_scraper.search_all_hashtags()
-
-            # DEBUG: Print what we got back
-            print(f"🔍 Search results type: {type(search_results)}")
-            print(
-                f"🔍 Search results keys: {list(search_results.keys()) if isinstance(search_results, dict) else 'Not a dict'}")
-
             total_profiles_found = 0
 
-            # Process results from each hashtag
-
             for i, hashtag in enumerate(hashtags):
+                # Check timing before processing each hashtag
+                if not self._check_time_and_save_if_needed():
+                    return
+
+                self.session_state.current_hashtag_index = i
                 self._update_progress("search", current_hashtag_index=i, current_hashtag=hashtag)
 
                 try:
-                    # Get profiles for this hashtag from search results
-                    # tag = f"#{hashtag}"
-                    # print(f"This is the current hashtag {tag}")
                     profiles_for_hashtag = search_results.get(hashtag, [])
-
-                    # DEBUG: Print what we found
                     print(f"🔍 Found {len(profiles_for_hashtag)} profiles for {hashtag}")
 
                     # Store hashtag metadata
@@ -601,12 +753,11 @@ class UnifiedTikTokScraper:
                     if profiles_for_hashtag:
                         for profile in profiles_for_hashtag:
                             user_id = profile.user_id
-                            # Store profile data with timestamp
                             self.profiles_data[user_id] = {
                                 'profile': profile,
                                 'search_timestamp': datetime.now().isoformat(),
                                 'profile_url': f"https://www.tiktok.com/@{profile.username}",
-                                'found_under_hashtags': set()  # Will be populated via relationships
+                                'found_under_hashtags': set()
                             }
                             self._add_relationships(hashtag=hashtag, profile=profile)
                             total_profiles_found += 1
@@ -626,10 +777,6 @@ class UnifiedTikTokScraper:
                 hashtags_for_profile = self.profile_to_hashtags.get(user_id, set())
                 self.profiles_data[user_id]['found_under_hashtags'] = hashtags_for_profile
 
-            # DEBUG: Final count
-            print(f"🔍 Total profiles stored: {len(self.profiles_data)}")
-            print(f"🔍 Profile user_ids: {list(self.profiles_data.keys())[:5]}...")  # Show first 5
-
         except Exception as e:
             self._log_error("SEARCH", "SEARCH_PHASE_ERROR", f"Search phase failed: {e}", exception=e)
             raise
@@ -637,8 +784,9 @@ class UnifiedTikTokScraper:
         total_profiles = len(self.profiles_data)
         print(f"\n🎯 Search phase completed: {total_profiles} unique profiles found")
 
-    async def _run_profiles_phase(self):
-        """Execute profiles & posts loading phase"""
+    # MODIFY: _run_profiles_phase method (add timing checks)
+    async def _run_profiles_phase_with_timing(self):
+        """Execute profiles & posts loading phase with timing checks"""
         if not self.profiles_data:
             print("❌ No profiles to process")
             return
@@ -647,15 +795,27 @@ class UnifiedTikTokScraper:
         print(f"👤 PHASE 2: LOADING PROFILES & POSTS")
         print(f"{'=' * 60}")
 
-        # Extract actual AuthorProfile objects from stored data
-        profiles_list = [profile_data['profile'] for profile_data in self.profiles_data.values()]
-        self._update_progress("profiles", total_profiles=len(profiles_list))
+        self.session_state.current_phase = "profiles"
 
-        # Set up profile loader
-        self.profile_loader.set_profiles_to_load(profiles_list, self.profile_to_hashtags)
+        # Extract profiles that need post loading
+        profiles_to_process = []
+        for user_id, profile_data in self.profiles_data.items():
+            if 'posts_count' not in profile_data or profile_data.get('posts_count', 0) == 0:
+                profiles_to_process.append(profile_data['profile'])
 
-        for i, profile_data in enumerate(self.profiles_data.values()):
-            profile = profile_data['profile']
+        if not profiles_to_process:
+            print("✅ All profiles already have posts loaded")
+            return
+
+        self._update_progress("profiles", total_profiles=len(profiles_to_process))
+        self.profile_loader.set_profiles_to_load(profiles_to_process, self.profile_to_hashtags)
+
+        for i, profile in enumerate(profiles_to_process):
+            # Check timing before processing each profile
+            if not self._check_time_and_save_if_needed():
+                return
+
+            self.session_state.current_profile_index = i
             user_id = profile.user_id
 
             self._update_progress("profiles", current_profile_index=i,
@@ -663,28 +823,22 @@ class UnifiedTikTokScraper:
 
             try:
                 print(f"\n👤 Loading posts for @{profile.username}")
-
-                # Track load timestamp
                 load_start_time = datetime.now().isoformat()
 
-                # Load posts for this profile
                 posts = await self.profile_loader.load_profile_posts(profile)
 
                 if posts:
-                    # Update profile data with load info
                     self.profiles_data[user_id].update({
                         'posts_count': len(posts),
                         'load_timestamp': load_start_time
                     })
 
-                    # Store posts and relationships
                     for post in posts:
                         self.posts_data[post.post_id] = post
                         self._add_relationships(profile=profile, post=post)
 
                     print(f"✅ Loaded {len(posts)} posts for @{profile.username}")
                 else:
-                    # Still update load info even if no posts
                     self.profiles_data[user_id].update({
                         'posts_count': 0,
                         'load_timestamp': load_start_time
@@ -695,7 +849,6 @@ class UnifiedTikTokScraper:
             except Exception as e:
                 self._log_error("PROFILES", "PROFILE_ERROR", f"Failed to load @{profile.username}",
                                 user_id, e)
-                # Still update with error info
                 self.profiles_data[user_id].update({
                     'posts_count': 0,
                     'load_timestamp': datetime.now().isoformat(),
@@ -707,9 +860,9 @@ class UnifiedTikTokScraper:
         total_posts = len(self.posts_data)
         print(f"\n🎯 Profiles phase completed: {total_posts} posts loaded")
 
-    async def _run_comments_phase(self):
-
-        """Execute comments loading phase"""
+    # MODIFY: _run_comments_phase method (add timing checks)
+    async def _run_comments_phase_with_timing(self):
+        """Execute comments loading phase with timing checks"""
         if not self.posts_data:
             print("❌ No posts to process for comments")
             return
@@ -718,12 +871,23 @@ class UnifiedTikTokScraper:
         print(f"💬 PHASE 3: LOADING COMMENTS")
         print(f"{'=' * 60}")
 
-        posts_list = list(self.posts_data.values())
-        self._update_progress("comments", total_posts=len(posts_list))
+        self.session_state.current_phase = "comments"
+
+        # Find posts that need comment loading
+        posts_needing_comments = []
+        for post_id, post in self.posts_data.items():
+            if post_id not in self.post_to_comments or len(self.post_to_comments[post_id]) == 0:
+                posts_needing_comments.append(post)
+
+        if not posts_needing_comments:
+            print("✅ All posts already have comments loaded")
+            return
+
+        self._update_progress("comments", total_posts=len(posts_needing_comments))
 
         # Group posts by profile for efficient processing
         posts_by_profile = {}
-        for post in posts_list:
+        for post in posts_needing_comments:
             if post.post_id in self.post_to_profile:
                 user_id = self.post_to_profile[post.post_id]
                 if user_id not in posts_by_profile:
@@ -732,6 +896,10 @@ class UnifiedTikTokScraper:
 
         # Process comments for each profile's posts
         for user_id, user_posts in posts_by_profile.items():
+            # Check timing before processing each profile's posts
+            if not self._check_time_and_save_if_needed():
+                return
+
             if user_id not in self.profiles_data:
                 continue
 
@@ -741,13 +909,9 @@ class UnifiedTikTokScraper:
             print(f"\n💬 Loading comments for @{profile.username} posts")
 
             try:
-                # Set up comments loader for this profile
                 self.comments_loader.load_posts_from_profile_loader(self.profile_loader, user_id)
-
-                # Load comments for all posts
                 comments_results = await self.comments_loader.load_all_comments()
 
-                # Process and store comments
                 for post_id, comments in comments_results.items():
                     if post_id in self.posts_data:
                         post = self.posts_data[post_id]
@@ -1065,44 +1229,3 @@ class UnifiedTikTokScraper:
         print(f"📅 File version: {timestamp}")
 
         return results
-
-
-# Usage example:
-async def main():
-    # Initialize unified scraper
-    config = UnifiedScraperConfig(
-
-        # Search results
-        max_profiles_per_hashtag=2,
-        search_scroll_count=2,
-
-        # Profile scraping
-        max_posts_per_profile=2,
-        profile_scroll_count=3,
-        profile_load_delay_min=10.0,
-        profile_load_delay_max=20.0,
-        page_load_wait_min=10.0,
-        page_load_wait_max=15.0,
-        reading_pause_probability=0.8,
-
-        max_comments_per_post=10,
-        max_scroll_attempts_comments=2,
-
-        # Comment section scrolling behavior
-        comment_scroll_pause_min=2.0,
-        comment_scroll_pause_max=5.0,
-        comment_scroll_amount_base=500,
-        comment_scroll_amount_variation=100,
-    )
-
-    scraper = UnifiedTikTokScraper(config)
-
-    # Option 1: Complete workflow
-    hashtags = ["#TravelDeals"]
-    results = await scraper.run_complete_session(hashtags)
-    scraper.save_results()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-# TODO: Fix the Readme, has a lot of crap in it. Also TikAuth not working ( It doesn't break out of the loop)
