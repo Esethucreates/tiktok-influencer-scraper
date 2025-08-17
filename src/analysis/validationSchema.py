@@ -90,6 +90,20 @@ class PostHashtag(BaseModel):
         return v.lower()
 
 
+class HashtagFrequency(BaseModel):
+    influencer_tiktok_id: str = Field(..., min_length=1, description="Associated influencer TikTok ID")
+    hashtag: str = Field(..., min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_]+$',
+                         description="Hashtag text without #")
+    frequency: int = Field(..., ge=1, description="Hashtag frequency")
+
+    @field_validator('hashtag')
+    @classmethod
+    def validate_hashtag_format(cls, v):
+        if v.startswith('#'):
+            raise ValueError('Hashtag should not include the # symbol')
+        return v.lower()
+
+
 class TikTokComment(BaseModel):
     comment_id: str = Field(..., description="Unique Post ID")
     post_id: str = Field(..., description="Post ID")
