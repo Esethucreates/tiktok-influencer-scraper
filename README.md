@@ -41,7 +41,6 @@ The system captures comprehensive influencer metrics across multiple dimensions:
 - Username and display information
 - Follower count and following ratios
 - Bio content and contact information availability
-- Account verification status and creation date
 
 ### Content Performance
 - Engagement rates (likes, comments, shares)
@@ -107,3 +106,4 @@ The modular design ensures that this core discovery functionality remains focuse
 ---
 
 *This project represents a focused solution to automated influencer discovery, emphasizing data quality, scalability, and integration flexibility for growing e-commerce businesses.*
+*The is a certain feature that is closed off that will not make the project work. Because of the nature of this project, it was best not to include it.*
