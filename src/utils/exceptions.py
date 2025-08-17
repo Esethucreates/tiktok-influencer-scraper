@@ -13,6 +13,3 @@ class TikTokException(Exception):
 class AuthenticationError(TikTokException):
     """Failing to establish authentication"""
 
-
-class BadRequestError(TikTokException):
-    """Bad request made"""
