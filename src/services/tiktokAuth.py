@@ -8,28 +8,53 @@ class TikTokAuth(BaseAuth):
     """TikTok-specific authentication implementation"""
 
     #
-    def __init__(self, accounts_file: str = "../misc/scraping_accounts.json"):
+    def __init__(self, accounts_file: str = "../fileExports/scraping_accounts.json"):
         super().__init__("tiktok", accounts_file)
 
     def get_platform_url(self) -> str:
         return "https://www.tiktok.com/login"
 
-    async def verify_login_status(self, page) -> bool:
-        """Check if user is logged in by looking for login button"""
+    async def verify_login_status(self, page: uc.Tab) -> bool:
+        """
+        Check if user is logged in using a hierarchical approach:
+        1. First check URL to see if redirected from login page
+        2. If URL is ambiguous, check for login buttons
+        3. If no login buttons, check for other login page elements
+        4. If all checks pass, user is logged in
+        """
         try:
             # Wait a bit for page to fully load
             await asyncio.sleep(30)
 
-            # Look for login buttons - if they exist, user is not logged in
-            login_selectors = [
+            # Step 1: Check URL first to determine current page
+            print("Step 1: Checking URL...")
+            try:
+                current_url = await page.evaluate("window.location.href")
+                print(f"Current URL: {current_url}")
+
+                if current_url == "https://www.tiktok.com/login":
+                    print("Still on login page URL")
+                    return False  # Still on login page = not logged in
+                elif current_url == "https://www.tiktok.com/":
+                    print("Redirected to main page - likely logged in, but verifying...")
+                    # Continue to button/element checks to be sure
+                else:
+                    print(f"On different URL: {current_url} - proceeding with element checks...")
+
+            except Exception as e:
+                print(f"Error checking URL: {e} - proceeding with element checks...")
+
+            print("Proceeding to step 2...")
+
+            # Step 2: Check for login buttons
+            login_button_selectors = [
                 "button#header-login-button",
                 "button#top-right-action-bar-login-button",
                 "[data-e2e='top-login-button']",
-                "button:contains('Log in')",
-                "a:contains('Log in')"
             ]
 
-            for selector in login_selectors:
+            print("Step 2: Checking for login buttons...")
+            for selector in login_button_selectors:
                 try:
                     login_button = await page.select(selector)
                     if login_button:
@@ -38,11 +63,41 @@ class TikTokAuth(BaseAuth):
                 except Exception:
                     continue
 
-            print("No login button found - user appears to be logged in")
-            return True  # No login button found = logged in
+            print("No login button found, proceeding to step 3...")
+
+            # Step 3: Check for other login page elements (data attributes and text)
+            login_element_selectors = [
+                "[data-e2e='channel-item']",  # Login methods still present
+                "div#login-modal-title",
+                "[data-e2e='login-desc']",
+                "[data-e2e='bottom-sign-up']"
+            ]
+
+            print("Step 3: Checking for login page elements...")
+            for selector in login_element_selectors:
+                try:
+                    login_element = await page.select(selector)
+                    if login_element:
+                        print(f"Login element found with selector: {selector}")
+                        return False  # Login elements exist = not logged in
+                except Exception:
+                    continue
+
+            # Check for specific login text
+            try:
+                login_text_element = await page.find(text="Use phone / email / username", best_match=True)
+                if login_text_element:
+                    print("Login text 'Use phone / email / username' found")
+                    return False  # Login text exists = not logged in
+            except Exception:
+                pass
+
+            print("All login checks passed - user appears to be logged in")
+            return True
 
         except Exception as e:
             print(f"Error verifying login status: {e}")
+            # In case of error, assume not logged in for safety
             return False
 
     async def perform_login(self, browser, page, username: str, password: str) -> bool:
@@ -52,7 +107,7 @@ class TikTokAuth(BaseAuth):
 
             # Navigate to TikTok homepage
             await page.get(self.get_platform_url())
-            # TODO: Due to network constraints, logging in will require more time to load. Fix this!!
+
             print("Loading initial page for login")
             await asyncio.sleep(30)  # Wait for page to load
 
@@ -94,8 +149,7 @@ class TikTokAuth(BaseAuth):
             await asyncio.sleep(5)
 
             # Look for email login options
-            # FIXME: Instead, look for text containing email
-            email_options = await page.select_all("[data-e2e='channel-item']")
+            email_options = await page.select_all("[role='link']")
             if email_options and len(email_options) > 1:
                 await email_options[1].click()  # Usually the email option
                 await asyncio.sleep(3)
