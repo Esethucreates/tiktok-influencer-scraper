@@ -45,41 +45,7 @@ The system captures comprehensive influencer metrics across multiple dimensions:
 
 ### Content Performance
 - Engagement rates (likes, comments, shares)
-- Posting frequency and timing patterns
-- Content categories and hashtag consistency
-- Video performance trends and reach metrics
-
-### Audience Quality Indicators
-- Comment authenticity and quality patterns
-- Follower growth trajectory analysis
-- Engagement consistency across posts
-- Geographic and demographic signals
-
-## Influencer Qualification System
-
-### Filter Criteria
-The system applies multiple qualification filters:
-
-- **Scale Filtering**: Follower count ranges appropriate for SME budgets
-- **Engagement Thresholds**: Minimum engagement rate requirements
-- **Content Alignment**: Brand-content compatibility scoring
-- **Contactability**: Presence of business contact information
-
-### Scoring Algorithm
-Multi-dimensional scoring system that evaluates:
-
-- **Relevancy Score**: Content-brand alignment using hashtag and bio analysis
-- **Engagement Quality Score**: Authentic interaction rates and comment quality
-- **Audience Authenticity Score**: Bot detection and follower quality assessment
-- **Cost-Effectiveness Projection**: Expected ROI based on engagement and reach metrics
-
-### Verification & Validation
-Automated quality assurance including:
-
-- Growth pattern analysis for organic vs. purchased followers
-- Engagement authenticity verification
-- Content consistency and posting schedule validation
-- Inappropriate content scanning and brand safety checks
+- Content categories and hashtag consistence
 
 ## Data Processing Pipeline
 
@@ -94,9 +60,8 @@ Automated quality assurance including:
 - Removes duplicate profiles and invalid data points
 
 ### 3. Feature Engineering
-- Calculates derived metrics (engagement rates, growth trends)
+- Calculates derived metrics (engagement rates)
 - Creates content category classifications
-- Generates audience quality indicators
 
 ### 4. Validation & Storage
 - Applies SQLModel schemas for data consistency
@@ -138,10 +103,6 @@ This discovery engine serves as the foundational component of a broader influenc
 - **Campaign Management**: Additional systems manage outreach, negotiations, and performance tracking
 
 The modular design ensures that this core discovery functionality remains focused and maintainable while supporting diverse use cases across the broader platform.
-
-## Getting Started
-
-This system requires Python 3.8+ and handles TikTok's dynamic content loading through automated browser interaction. The application is designed to be self-contained for the discovery process, with clear data export capabilities for integration with downstream systems.
 
 ---
 
