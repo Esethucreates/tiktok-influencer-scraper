@@ -10,7 +10,7 @@
 **Output**: Comprehensive database of influencers with engagement metrics, content analysis, and audience insights
 
 ```
-# skincare → 50 influencers → Complete profiles → Engagement data → Ranked recommendations
+#skincare → 50 influencers → Complete profiles → Engagement data → Ranked recommendations
 ```
 
 ## 🔧 Technical Stack
