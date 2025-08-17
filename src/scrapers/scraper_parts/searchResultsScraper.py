@@ -1,27 +1,14 @@
 import asyncio
 import urllib.parse
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 
 import zendriver as uc
 
-from browserConfig import OptimizedNoDriver
-from src.scrapers.requestMonitor import CDPXHRMonitor
+from src.scrapers.DTOs.search_results_schemas import AuthorProfile
+from src.scrapers.core_parts.browserConfig import OptimizedNoDriver
+from src.scrapers.core_parts.requestMonitor import CDPXHRMonitor
 from src.utils.exceptions import AuthenticationError
 
-
-@dataclass
-class AuthorProfile:
-    user_id: str
-    username: str
-    display_name: str
-    avatar_url: str
-    verified: bool
-    follower_count: int
-    following_count: int
-    heart_count: int
-    video_count: int
-    raw_author_data: Dict[str, Any]
 
 class TikTokSearchScraper(CDPXHRMonitor):
     """
@@ -398,24 +385,3 @@ class TikTokSearchScraper(CDPXHRMonitor):
 
         OptimizedNoDriver.save_json_to_file(output_data, filename)
         return output_data
-
-
-# Usage example:
-
-async def main():
-    hashtags = ["#technology", "#coding"]
-    scraper = TikTokSearchScraper(hashtags, max_profiles_per_hashtag=2, scroll_count=2, scroll_pause=3)
-
-    # Method 1: Use the convenience method (recommended)
-    results = await scraper.run_search_session()
-
-    # Save results
-    scraper.save_results("../fileExports/jsonFiles/my_tiktok_results.json")
-
-    # Print summary
-    stats = scraper.get_summary_stats()
-    print(f"Total profiles found: {stats['total_unique_profiles']}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

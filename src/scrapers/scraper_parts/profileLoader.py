@@ -6,53 +6,13 @@ from typing import List, Dict, Any, Optional, Set
 
 import zendriver as uc
 
-from browserConfig import OptimizedNoDriver
-from requestMonitor import CDPXHRMonitor
-from searchResultsScraper import AuthorProfile, TikTokSearchScraper
+from src.scrapers.DTOs.profile_loader_schemas import ProfileLoadConfig, PostData
+from src.scrapers.DTOs.search_results_schemas import AuthorProfile
+from src.scrapers.core_parts.browserConfig import OptimizedNoDriver
+from src.scrapers.core_parts.requestMonitor import CDPXHRMonitor
+from src.scrapers.scraper_parts.searchResultsScraper import TikTokSearchScraper
+
 from src.utils.exceptions import AuthenticationError
-
-
-@dataclass
-class PostData:
-    """Data structure for individual TikTok post information"""
-    post_id: str
-    raw_post_data: Dict[str, Any]
-
-
-@dataclass
-class ProfileLoadConfig:
-    """Configuration for profile loading behavior with human-like interaction settings"""
-    # Post collection limits
-    max_posts_per_profile: int = 700
-
-    # Scrolling behavior
-    scroll_count: int = 25
-    scroll_pause_min: float = 2.0
-    scroll_pause_max: float = 4.0
-    scroll_amount_base: int = 800
-    scroll_amount_variation: int = 200
-
-    # Page loading and navigation
-    page_load_wait_min: float = 8.0
-    page_load_wait_max: float = 15.0
-    profile_navigation_delay_min: float = 3.0
-    profile_navigation_delay_max: float = 6.0
-
-    # Inter-profile delays
-    profile_load_delay_min: float = 8.0
-    profile_load_delay_max: float = 15.0
-
-    # Human-like interaction settings
-    reading_pause_probability: float = 0.3  # 30% chance of extra reading pause
-    reading_pause_min: float = 1.0
-    reading_pause_max: float = 3.0
-
-    # Scroll variation settings
-    scroll_direction_change_probability: float = 0.1  # 10% chance to scroll up briefly
-    scroll_up_amount: int = 200
-
-    # Session management
-    max_concurrent_profiles: int = 1  # Process profiles sequentially by default
 
 
 class TikTokProfileLoader(CDPXHRMonitor):
@@ -658,39 +618,3 @@ class TikTokProfileLoader(CDPXHRMonitor):
 
         OptimizedNoDriver.save_json_to_file(output_data, filename)
         return output_data
-
-
-async def main():
-    # After running search
-    search_scraper = TikTokSearchScraper(['#fitness'], max_profiles_per_hashtag=3, scroll_count=4)
-    search_results = await search_scraper.run_search_session()
-    search_scraper.save_results()
-
-    stats = search_scraper.get_summary_stats()
-    print(f"Total profiles found: {stats['total_unique_profiles']}")
-
-    # Configure and run profile loading
-    config = ProfileLoadConfig(
-        max_posts_per_profile=3,
-        scroll_count=5,
-        profile_load_delay_min=10.0,
-        profile_load_delay_max=20.0,
-        page_load_wait_min=15.0,
-        page_load_wait_max=20.0,
-        reading_pause_probability=0.8,
-    )
-
-    profile_loader = TikTokProfileLoader(config)
-    profile_loader.load_profiles_from_search_results(search_scraper)
-    profile_posts = await profile_loader.run_profile_loading_session()
-
-    # Save results
-    profile_loader.save_results("profile_posts_results.json")
-
-    # Get DB-friendly data
-    # db_data = profile_loader.get_db_friendly_data()
-    # print("DB-friendly data structure ready for database insertion")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
