@@ -34,7 +34,6 @@ class TikTokDataCleaner:
         self.cleaned_reply_comments = []
         self.cleaned_post_hashtags = []
 
-        # FIXME: Update this. Create a schema for it
         self.hashtag_frequency = defaultdict(Counter)  # influencer_id -> {hashtag: count}
 
     def setup_logging(self):
