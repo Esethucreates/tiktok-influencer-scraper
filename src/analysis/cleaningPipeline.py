@@ -1,13 +1,13 @@
 import json
 import logging
-import pandas as pd
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict, Counter
-from pydantic import ValidationError, TypeAdapter, HttpUrl
+from pathlib import Path
+from typing import Dict, Any, Tuple
 
-from dataValidation import TikTokInfluencer, TikTokPost, TikTokComment, ReplyComment, PostHashtag
+import pandas as pd
+from pydantic import ValidationError, TypeAdapter
+
+from validationSchema import *
 
 
 class TikTokDataCleaner:
@@ -33,6 +33,8 @@ class TikTokDataCleaner:
         self.cleaned_comments = []
         self.cleaned_reply_comments = []
         self.cleaned_post_hashtags = []
+
+        # FIXME: Update this. Create a schema for it
         self.hashtag_frequency = defaultdict(Counter)  # influencer_id -> {hashtag: count}
 
     def setup_logging(self):
@@ -289,17 +291,22 @@ class TikTokDataCleaner:
 
         return comments, reply_comments
 
-    def _create_hashtag_frequency_data(self) -> List[Dict]:
+    def _create_hashtag_frequency_data(self) -> List[HashtagFrequency]:
         """Create hashtag frequency lookup table"""
         hashtag_freq_data = []
 
         for influencer_id, hashtag_counts in self.hashtag_frequency.items():
             for hashtag, count in hashtag_counts.items():
-                hashtag_freq_data.append({
-                    'influencer_tiktok_id': influencer_id,
-                    'hashtag': hashtag,
-                    'frequency_count': count
-                })
+                try:
+                    hashtag_freq_obj = HashtagFrequency(
+                        influencer_tiktok_id=influencer_id,
+                        hashtag=hashtag,
+                        frequency=count
+                    )
+                    hashtag_freq_data.append(hashtag_freq_obj)
+                except ValidationError as e:
+                    self.logger.error(f"Validation error for hashtag frequency {influencer_id}-{hashtag}: {e}")
+                    continue
 
         return hashtag_freq_data
 
@@ -358,7 +365,7 @@ class TikTokDataCleaner:
 
         post_hashtag_columns = ['post_id', 'hashtag']
 
-        hashtag_freq_columns = ['influencer_tiktok_id', 'hashtag', 'frequency_count']
+        hashtag_freq_columns = ['influencer_tiktok_id', 'hashtag', 'frequency']
 
         # Save influencers
         if self.cleaned_influencers:
@@ -404,8 +411,9 @@ class TikTokDataCleaner:
         # Save hashtag frequency lookup table
         hashtag_freq_data = self._create_hashtag_frequency_data()
         if hashtag_freq_data:
-            hashtag_freq_df = pd.DataFrame(hashtag_freq_data)
+            hashtag_freq_df = pd.DataFrame([hf.model_dump() for hf in hashtag_freq_data])
             hashtag_freq_df = hashtag_freq_df.reindex(columns=hashtag_freq_columns, fill_value=None)
+
             filename = f"hashtag_frequency_{timestamp}.csv"
             hashtag_freq_df.to_csv(self.output_dir / filename, index=False)
             self.logger.info(f"Saved {len(hashtag_freq_df)} hashtag frequency records to {filename}")
